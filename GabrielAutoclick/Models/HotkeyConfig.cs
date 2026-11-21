@@ -108,6 +108,22 @@ namespace GabrielAutoclick.Models
             Modifiers = ModifierKeys.None
         };
 
+        public HotkeyItem BackgroundToggle { get; set; } = new HotkeyItem
+        {
+            Name = "Iniciar / parar clique em segundo plano",
+            Description = "Liga ou desliga o clique em segundo plano",
+            Key = Key.F10,
+            Modifiers = ModifierKeys.None
+        };
+
+        public HotkeyItem BackgroundPause { get; set; } = new HotkeyItem
+        {
+            Name = "Pausar / continuar clique em segundo plano",
+            Description = "Pausa ou retoma o clique em segundo plano",
+            Key = Key.F11,
+            Modifiers = ModifierKeys.None
+        };
+
         public HotkeyItem Panic { get; set; } = new HotkeyItem
         {
             Name = "Panic Button",
@@ -129,6 +145,12 @@ namespace GabrielAutoclick.Models
 
             StopMacro.Key = Key.F9;
             StopMacro.Modifiers = ModifierKeys.None;
+
+            BackgroundToggle.Key = Key.F10;
+            BackgroundToggle.Modifiers = ModifierKeys.None;
+
+            BackgroundPause.Key = Key.F11;
+            BackgroundPause.Modifiers = ModifierKeys.None;
 
             Panic.Key = Key.F12;
             Panic.Modifiers = ModifierKeys.None;

@@ -25,6 +25,8 @@ namespace GabrielAutoclick.Services
         public event Action? StartMacroTriggered;
         public event Action? StopMacroTriggered;
         public event Action? PanicTriggered;
+        public event Action? BackgroundToggleTriggered;
+        public event Action? BackgroundPauseTriggered;
 
         // Live capture event
         public event Action<Key, ModifierKeys>? HotkeyCaptured;
@@ -150,7 +152,18 @@ namespace GabrielAutoclick.Services
                         LoggerService.Log($"[HOTKEY] Action=StartMacro Key={key} Modifiers={currentMods} Source=KeyboardHook ForegroundWindow='{fgWindow}' Timestamp={DateTime.Now:HH:mm:ss.fff}");
                         StartMacroTriggered?.Invoke();
                     }
-                    // 5. Dynamic Stop Macro (e.g. F9)
+                    // 5. Background click start/stop and pause (e.g. F10 / F11)
+                    else if (MatchesHotkey(Config.BackgroundToggle, key, currentMods, vkCode))
+                    {
+                        LoggerService.Log($"[HOTKEY] Action=BackgroundToggle Key={key} Modifiers={currentMods}");
+                        BackgroundToggleTriggered?.Invoke();
+                    }
+                    else if (MatchesHotkey(Config.BackgroundPause, key, currentMods, vkCode))
+                    {
+                        LoggerService.Log($"[HOTKEY] Action=BackgroundPause Key={key} Modifiers={currentMods}");
+                        BackgroundPauseTriggered?.Invoke();
+                    }
+                    // 6. Dynamic Stop Macro (e.g. F9)
                     else if (MatchesHotkey(Config.StopMacro, key, currentMods, vkCode))
                     {
                         LoggerService.Log($"[HOTKEY] Action=StopMacro Key={key} Modifiers={currentMods} Source=KeyboardHook ForegroundWindow='{fgWindow}' Timestamp={DateTime.Now:HH:mm:ss.fff}");
@@ -225,6 +238,18 @@ namespace GabrielAutoclick.Services
             if (actionTag != "StopMacro" && Config.StopMacro.Key == key && Config.StopMacro.Modifiers == mods)
             {
                 conflictName = Config.StopMacro.Name;
+                return true;
+            }
+
+            if (actionTag != "BackgroundToggle" && Config.BackgroundToggle.Key == key && Config.BackgroundToggle.Modifiers == mods)
+            {
+                conflictName = Config.BackgroundToggle.Name;
+                return true;
+            }
+
+            if (actionTag != "BackgroundPause" && Config.BackgroundPause.Key == key && Config.BackgroundPause.Modifiers == mods)
+            {
+                conflictName = Config.BackgroundPause.Name;
                 return true;
             }
 

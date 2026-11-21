@@ -47,6 +47,81 @@ namespace GabrielAutoclick.Helpers
 
         public const uint GA_ROOT = 2;
 
+        #region Window messages for background clicking
+
+        public const uint WM_MOUSEMOVE_U = 0x0200;
+        public const uint WM_LBUTTONDOWN_U = 0x0201;
+        public const uint WM_LBUTTONUP_U = 0x0202;
+        public const uint WM_LBUTTONDBLCLK_U = 0x0203;
+        public const uint WM_RBUTTONDOWN_U = 0x0204;
+        public const uint WM_RBUTTONUP_U = 0x0205;
+        public const uint WM_MBUTTONDOWN_U = 0x0207;
+        public const uint WM_MBUTTONUP_U = 0x0208;
+
+        public const int MK_LBUTTON = 0x0001;
+        public const int MK_RBUTTON = 0x0002;
+        public const int MK_MBUTTON = 0x0010;
+
+        public const uint CWP_SKIPINVISIBLE = 0x0001;
+        public const uint CWP_SKIPTRANSPARENT = 0x0004;
+
+        public const uint SMTO_ABORTIFHUNG = 0x0002;
+        public const int GCL_STYLE = -26;
+        public const uint CS_DBLCLKS = 0x0008;
+
+        [DllImport("user32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam,
+            uint fuFlags, uint uTimeout, out IntPtr lpdwResult);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool IsWindow(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool IsIconic(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        public static extern IntPtr ChildWindowFromPointEx(IntPtr hwndParent, POINT pt, uint uFlags);
+
+        [DllImport("user32.dll")]
+        public static extern int MapWindowPoints(IntPtr hWndFrom, IntPtr hWndTo, ref POINT lpPoints, uint cPoints);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool ScreenToClient(IntPtr hWnd, ref POINT lpPoint);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool ClientToScreen(IntPtr hWnd, ref POINT lpPoint);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool GetClientRect(IntPtr hWnd, out RECT lpRect);
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        public static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
+
+        public const uint GW_HWNDNEXT = 2;
+        public const uint GW_CHILD = 5;
+        public const int GWL_EXSTYLE = -20;
+        public const long WS_EX_TRANSPARENT = 0x20;
+
+        [DllImport("user32.dll")]
+        public static extern IntPtr GetWindow(IntPtr hWnd, uint uCmd);
+
+        [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")]
+        public static extern IntPtr GetWindowLongPtr(IntPtr hWnd, int nIndex);
+
+        [DllImport("user32.dll", EntryPoint = "GetClassLongPtrW")]
+        public static extern IntPtr GetClassLongPtr(IntPtr hWnd, int nIndex);
+
+        #endregion
+
         [StructLayout(LayoutKind.Sequential)]
         public struct POINT
         {

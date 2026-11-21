@@ -41,6 +41,7 @@ namespace GabrielAutoclick.Models
 
         public HotkeyConfig Hotkeys { get; set; } = new HotkeyConfig();
         public List<SafeZone> SafeZones { get; set; } = new List<SafeZone>();
+        public BackgroundClickSettings BackgroundClick { get; set; } = new BackgroundClickSettings();
 
         public AppSettings()
         {

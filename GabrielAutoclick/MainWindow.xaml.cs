@@ -108,6 +108,8 @@ namespace GabrielAutoclick
             TxtVersion.Text = $"{Constants.AppName}  ·  versão {Constants.AppVersion}";
             UpdateMacroSummary();
 
+            InitBackgroundClick();
+
             _isInitialized = true;
             LoggerService.Log("[STARTUP] MainWindow pronta e visível");
         }
@@ -329,7 +331,7 @@ namespace GabrielAutoclick
         {
             if (sender is RadioButton rb && ViewDashboard != null)
             {
-                var navItems = new[] { TabNavDashboard, TabNavAutoclick, TabNavMultiClick, TabNavMacro, TabNavSafeZones, TabNavProfiles, TabNavStatistics, TabNavHotkeys, TabNavSettings };
+                var navItems = new[] { TabNavDashboard, TabNavAutoclick, TabNavMultiClick, TabNavMacro, TabNavSafeZones, TabNavProfiles, TabNavStatistics, TabNavHotkeys, TabNavSettings, TabNavBackground };
                 int index = Array.IndexOf(navItems, rb);
                 if (index < 0) return;
 
@@ -342,6 +344,7 @@ namespace GabrielAutoclick
                 ViewStatistics.Visibility = index == 6 ? Visibility.Visible : Visibility.Collapsed;
                 ViewHotkeys.Visibility = index == 7 ? Visibility.Visible : Visibility.Collapsed;
                 ViewSettings.Visibility = index == 8 ? Visibility.Visible : Visibility.Collapsed;
+                ViewBackground.Visibility = index == 9 ? Visibility.Visible : Visibility.Collapsed;
             }
         }
 
@@ -526,6 +529,8 @@ namespace GabrielAutoclick
             // Macro activity has priority in the global status bar
             if (_macroService.IsRecording) SetGlobalStatus("Gravando macro", "DangerBrush");
             else if (_macroService.IsPlaying) SetGlobalStatus("Executando macro", "SuccessBrush");
+            else if (state == AutoClickState.Stopped && _appManager.BackgroundClickService.State == BackgroundRunState.Running) SetGlobalStatus("Clique em segundo plano ativo", "SuccessBrush");
+            else if (state == AutoClickState.Stopped && _appManager.BackgroundClickService.State == BackgroundRunState.Paused) SetGlobalStatus("Segundo plano pausado", "WarningBrush");
             else SetGlobalStatus(text, brushKey);
 
             TxtMainActionIcon.Text = active ? "\uE71A" : "\uE768";
@@ -1312,6 +1317,7 @@ namespace GabrielAutoclick
             s.WallpaperEnabled = ChkWallpaper.IsChecked == true;
             s.WallpaperDarkness = SelectedWallpaperDarkness();
             s.SafeZones = _safeZones.ToList();
+            s.BackgroundClick = BuildBgSettings();
             return s;
         }
 
@@ -1417,6 +1423,8 @@ namespace GabrielAutoclick
             TxtKeySelectPosition.Text = _hotkeyService.Config.SelectPosition.ToDisplayString();
             TxtKeyStartMacro.Text = _hotkeyService.Config.StartMacro.ToDisplayString();
             TxtKeyStopMacro.Text = _hotkeyService.Config.StopMacro.ToDisplayString();
+            TxtKeyBgToggle.Text = _hotkeyService.Config.BackgroundToggle.ToDisplayString();
+            TxtKeyBgPause.Text = _hotkeyService.Config.BackgroundPause.ToDisplayString();
 
             if (TxtDashShortcutHint != null)
             {
@@ -1439,6 +1447,8 @@ namespace GabrielAutoclick
                     "SelectPosition" => "Selecionar posição",
                     "StartMacro" => "Reproduzir macro",
                     "StopMacro" => "Parar macro",
+                    "BackgroundToggle" => "Iniciar / parar clique em segundo plano",
+                    "BackgroundPause" => "Pausar / continuar clique em segundo plano",
                     _ => tag
                 };
 
@@ -1448,6 +1458,8 @@ namespace GabrielAutoclick
                     "SelectPosition" => _hotkeyService.Config.SelectPosition.ToDisplayString(),
                     "StartMacro" => _hotkeyService.Config.StartMacro.ToDisplayString(),
                     "StopMacro" => _hotkeyService.Config.StopMacro.ToDisplayString(),
+                    "BackgroundToggle" => _hotkeyService.Config.BackgroundToggle.ToDisplayString(),
+                    "BackgroundPause" => _hotkeyService.Config.BackgroundPause.ToDisplayString(),
                     _ => "Nenhum"
                 };
 
@@ -1497,6 +1509,14 @@ namespace GabrielAutoclick
                     case "StartMacro":
                         _hotkeyService.Config.StartMacro.Key = key;
                         _hotkeyService.Config.StartMacro.Modifiers = mods;
+                        break;
+                    case "BackgroundToggle":
+                        _hotkeyService.Config.BackgroundToggle.Key = key;
+                        _hotkeyService.Config.BackgroundToggle.Modifiers = mods;
+                        break;
+                    case "BackgroundPause":
+                        _hotkeyService.Config.BackgroundPause.Key = key;
+                        _hotkeyService.Config.BackgroundPause.Modifiers = mods;
                         break;
                     case "StopMacro":
                         _hotkeyService.Config.StopMacro.Key = key;

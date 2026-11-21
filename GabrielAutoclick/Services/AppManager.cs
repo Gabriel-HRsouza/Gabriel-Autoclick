@@ -30,6 +30,7 @@ namespace GabrielAutoclick.Services
         public AutoClickService AutoClickService { get; }
         public MultiClickService MultiClickService { get; }
         public MacroService MacroService { get; }
+        public BackgroundClickService BackgroundClickService { get; }
         public HotkeyService HotkeyService { get; }
         public ProfileService ProfileService { get; }
         public TrayIconService TrayIconService { get; }
@@ -73,6 +74,8 @@ namespace GabrielAutoclick.Services
                 WindowRestrictionService,
                 StatisticsService
             );
+
+            BackgroundClickService = new BackgroundClickService(StatisticsService);
 
             HotkeyService = new HotkeyService(SettingsService.CurrentSettings.Hotkeys);
             TrayIconService = new TrayIconService();
@@ -137,6 +140,16 @@ namespace GabrielAutoclick.Services
             HotkeyService.StopMacroTriggered += () =>
             {
                 Application.Current?.Dispatcher.Invoke(() => StopMacro());
+            };
+
+            HotkeyService.BackgroundToggleTriggered += () =>
+            {
+                Application.Current?.Dispatcher.Invoke(() => MainWindowInstance?.ToggleBackgroundClick());
+            };
+
+            HotkeyService.BackgroundPauseTriggered += () =>
+            {
+                Application.Current?.Dispatcher.Invoke(() => BackgroundClickService.TogglePause());
             };
 
             HotkeyService.PanicTriggered += () =>
@@ -342,7 +355,7 @@ namespace GabrielAutoclick.Services
         {
             if (vk == NativeMethods.VK_F12) return true;
             var cfg = HotkeyService.Config;
-            foreach (var item in new[] { cfg.ToggleAutoclick, cfg.SelectPosition, cfg.StartMacro, cfg.StopMacro })
+            foreach (var item in new[] { cfg.ToggleAutoclick, cfg.SelectPosition, cfg.StartMacro, cfg.StopMacro, cfg.BackgroundToggle, cfg.BackgroundPause })
             {
                 if (item != null && item.Key != System.Windows.Input.Key.None &&
                     System.Windows.Input.KeyInterop.VirtualKeyFromKey(item.Key) == vk)
@@ -369,6 +382,7 @@ namespace GabrielAutoclick.Services
             AutoClickService.Panic();
             MultiClickService.Panic();
             MacroService.Panic();
+            BackgroundClickService.Panic();
             SetExecutionState(AppExecutionState.Stopped);
         }
 

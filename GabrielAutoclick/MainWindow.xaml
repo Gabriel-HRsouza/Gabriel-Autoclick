@@ -92,6 +92,7 @@
                                 <RadioButton x:Name="TabNavAutoclick" Style="{StaticResource NavItem}" Tag="&#xE962;" Content="Autoclicker" Checked="NavTab_Checked"/>
                                 <RadioButton x:Name="TabNavMultiClick" Style="{StaticResource NavItem}" Tag="&#xE8FD;" Content="Múltiplos pontos" Checked="NavTab_Checked"/>
                                 <RadioButton x:Name="TabNavMacro" Style="{StaticResource NavItem}" Tag="&#xE7C8;" Content="Macro" Checked="NavTab_Checked"/>
+                                <RadioButton x:Name="TabNavBackground" Style="{StaticResource NavItem}" Tag="&#xE7F4;" Content="Segundo plano" Checked="NavTab_Checked"/>
 
                                 <TextBlock Text="Ferramentas" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="14,16,0,6"/>
                                 <RadioButton x:Name="TabNavSafeZones" Style="{StaticResource NavItem}" Tag="&#xEA18;" Content="Zonas protegidas" Checked="NavTab_Checked"/>
@@ -702,6 +703,249 @@
                         </Grid>
                     </Grid>
 
+                    <!-- =================== SEGUNDO PLANO =================== -->
+                    <Grid x:Name="ViewBackground" Visibility="Collapsed" Margin="32,28,32,20">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <StackPanel>
+                            <TextBlock Text="Clique em segundo plano" Style="{StaticResource PageTitle}"/>
+                            <TextBlock Text="Clica dentro de uma janela escolhida sem usar o seu cursor. Você pode mexer o mouse, usar outros programas e minimizar o Gabriel Autoclick enquanto isso." Style="{StaticResource PageSubtitle}" Margin="0,4,0,18"/>
+                        </StackPanel>
+
+                        <!-- Run controls -->
+                        <Border Grid.Row="1" Style="{StaticResource Card}" Padding="20,16" Margin="0,0,0,12">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel VerticalAlignment="Center">
+                                    <StackPanel Orientation="Horizontal">
+                                        <Ellipse x:Name="BgStatusDot" Width="10" Height="10" Fill="{StaticResource TextMutedBrush}" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                                        <TextBlock x:Name="TxtBgState" Text="Parado" FontSize="16" FontWeight="SemiBold"/>
+                                    </StackPanel>
+                                    <TextBlock x:Name="TxtBgSubstatus" Text="Selecione uma posição para começar." Style="{StaticResource SectionHint}" Margin="20,4,0,0" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,20,0">
+                                    <StackPanel Margin="0,0,20,0">
+                                        <TextBlock Text="Cliques" Style="{StaticResource StatLabel}"/>
+                                        <TextBlock x:Name="TxtBgClicks" Text="0" FontSize="16" FontWeight="SemiBold"/>
+                                    </StackPanel>
+                                    <StackPanel>
+                                        <TextBlock Text="Ciclos" Style="{StaticResource StatLabel}"/>
+                                        <TextBlock x:Name="TxtBgCyclesDone" Text="0" FontSize="16" FontWeight="SemiBold"/>
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Button x:Name="BtnBgStart" Click="BtnBgStart_Click" Style="{StaticResource PrimaryButton}" MinWidth="104" Margin="0,0,8,0">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="&#xE768;" Style="{StaticResource Icon}" FontSize="11" Margin="0,0,8,0"/>
+                                            <TextBlock Text="Iniciar"/>
+                                        </StackPanel>
+                                    </Button>
+                                    <Button x:Name="BtnBgPause" Click="BtnBgPause_Click" Style="{StaticResource SecondaryButton}" MinWidth="104" Margin="0,0,8,0" IsEnabled="False">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock x:Name="TxtBgPauseIcon" Text="&#xE769;" Style="{StaticResource Icon}" FontSize="11" Margin="0,0,8,0"/>
+                                            <TextBlock x:Name="TxtBgPauseText" Text="Pausar"/>
+                                        </StackPanel>
+                                    </Button>
+                                    <Button x:Name="BtnBgStop" Click="BtnBgStop_Click" Style="{StaticResource SecondaryButton}" MinWidth="90" IsEnabled="False">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="&#xE71A;" Style="{StaticResource Icon}" FontSize="11" Margin="0,0,8,0"/>
+                                            <TextBlock Text="Parar"/>
+                                        </StackPanel>
+                                    </Button>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <!-- Warning / error banner -->
+                        <Border x:Name="BgBanner" Grid.Row="2" Visibility="Collapsed" Background="#1FE0A43B" BorderBrush="#66E0A43B"
+                                BorderThickness="1" CornerRadius="6" Padding="14,10" Margin="0,0,0,12">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock x:Name="TxtBgBannerIcon" Text="&#xE7BA;" Style="{StaticResource Icon}" Foreground="{StaticResource WarningBrush}" VerticalAlignment="Top" Margin="0,2,12,0"/>
+                                <TextBlock x:Name="TxtBgBanner" Grid.Column="1" Text="" TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                <Button Grid.Column="2" Click="BtnBgCloseBanner_Click" Style="{StaticResource GhostButton}" MinHeight="22" Height="22" Padding="6,0" Margin="12,0,0,0"
+                                        VerticalAlignment="Top" ToolTip="Fechar aviso">
+                                    <TextBlock Text="&#xE8BB;" Style="{StaticResource Icon}" FontSize="9"/>
+                                </Button>
+                            </Grid>
+                        </Border>
+
+                        <!-- Main area -->
+                        <Grid Grid.Row="3">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="16"/>
+                                <ColumnDefinition Width="290"/>
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Points -->
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+                                <WrapPanel Margin="0,0,0,10">
+                                    <Button Click="BtnBgPick_Click" Style="{StaticResource PrimaryButton}" Margin="0,0,8,8">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="&#xE81D;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,8,0"/>
+                                            <TextBlock Text="Selecionar posição"/>
+                                        </StackPanel>
+                                    </Button>
+                                    <Button x:Name="BtnBgTest" Click="BtnBgTest_Click" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8" ToolTip="Envia um único clique no ponto selecionado usando o método atual">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="&#xE768;" Style="{StaticResource Icon}" FontSize="11" Margin="0,0,8,0"/>
+                                            <TextBlock Text="Testar"/>
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Click="BtnBgRemove_Click" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="&#xE74D;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,8,0"/>
+                                            <TextBlock Text="Remover"/>
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Click="BtnBgClear_Click" Style="{StaticResource SecondaryButton}" Content="Limpar" Margin="0,0,8,8"/>
+                                </WrapPanel>
+
+                                <DataGrid Grid.Row="1" x:Name="DgBgPoints" SelectionChanged="DgBgPoints_SelectionChanged">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="#" Binding="{Binding Index, Mode=OneWay}" Width="40" IsReadOnly="True"/>
+                                        <DataGridTextColumn Header="Janela" Binding="{Binding WindowDisplay, Mode=OneWay}" Width="1.4*" IsReadOnly="True"/>
+                                        <DataGridTextColumn Header="Posição" Binding="{Binding PositionText, Mode=OneWay}" Width="84" IsReadOnly="True"/>
+                                        <DataGridTextColumn Header="Clique" Binding="{Binding KindName, Mode=OneWay}" Width="92" IsReadOnly="True"/>
+                                        <DataGridTextColumn Header="Espera" Binding="{Binding DelayMs}" Width="70" EditingElementStyle="{StaticResource GridEditTextBox}"/>
+                                        <DataGridTextColumn Header="Status" Binding="{Binding Status, Mode=OneWay}" Width="*" IsReadOnly="True"/>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </Grid>
+
+                            <!-- Side panel -->
+                            <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto" Focusable="False" Margin="0,0,-14,0">
+                                <StackPanel Margin="0,0,14,0">
+                                    <!-- Selected target -->
+                                    <Border Style="{StaticResource Card}" Padding="16" Margin="0,0,0,12">
+                                        <StackPanel>
+                                            <TextBlock Text="Alvo selecionado" Style="{StaticResource SectionTitle}" Margin="0,0,0,10"/>
+                                            <TextBlock x:Name="TxtBgNoTarget" Text="Nenhum ponto selecionado. Use &quot;Selecionar posição&quot; e clique dentro do programa desejado." Style="{StaticResource SectionHint}" Margin="0"/>
+                                            <StackPanel x:Name="PanelBgTarget" Visibility="Collapsed">
+                                                <TextBlock x:Name="TxtBgTargetTitle" Text="—" FontWeight="SemiBold" TextWrapping="Wrap" MaxHeight="40" TextTrimming="CharacterEllipsis"/>
+                                                <Grid Margin="0,10,0,0">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="84"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <Grid.RowDefinitions>
+                                                        <RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/>
+                                                    </Grid.RowDefinitions>
+                                                    <TextBlock Grid.Row="0" Text="Programa" Style="{StaticResource StatLabel}" Margin="0,2"/>
+                                                    <TextBlock Grid.Row="0" Grid.Column="1" x:Name="TxtBgTargetProcess" Text="—" FontSize="12" Margin="0,2" TextTrimming="CharacterEllipsis"/>
+                                                    <TextBlock Grid.Row="1" Text="Posição" Style="{StaticResource StatLabel}" Margin="0,2"/>
+                                                    <TextBlock Grid.Row="1" Grid.Column="1" x:Name="TxtBgTargetPos" Text="—" FontSize="12" Margin="0,2" TextTrimming="CharacterEllipsis"/>
+                                                    <TextBlock Grid.Row="2" Text="Identificador" Style="{StaticResource StatLabel}" Margin="0,2"/>
+                                                    <TextBlock Grid.Row="2" Grid.Column="1" x:Name="TxtBgTargetHandle" Text="—" FontSize="12" Margin="0,2" TextTrimming="CharacterEllipsis"/>
+                                                    <TextBlock Grid.Row="3" Text="Janela" Style="{StaticResource StatLabel}" Margin="0,2"/>
+                                                    <StackPanel Grid.Row="3" Grid.Column="1" Orientation="Horizontal" Margin="0,2">
+                                                        <Ellipse x:Name="BgTargetDot" Width="7" Height="7" Fill="{StaticResource SuccessBrush}" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                                        <TextBlock x:Name="TxtBgTargetState" Text="Aberta" FontSize="12"/>
+                                                    </StackPanel>
+                                                </Grid>
+
+                                                <TextBlock Text="Tipo de clique deste ponto" Style="{StaticResource FieldLabel}" Margin="0,12,0,6"/>
+                                                <ComboBox x:Name="CmbBgPointKind" SelectionChanged="CmbBgPointKind_SelectionChanged">
+                                                    <ComboBoxItem Content="Esquerdo"/>
+                                                    <ComboBoxItem Content="Direito"/>
+                                                    <ComboBoxItem Content="Meio"/>
+                                                    <ComboBoxItem Content="Duplo clique"/>
+                                                </ComboBox>
+
+                                                <Button Click="BtnBgHighlight_Click" Style="{StaticResource SecondaryButton}" Margin="0,10,0,0" HorizontalAlignment="Stretch">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="&#xE7B3;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,8,0"/>
+                                                        <TextBlock Text="Mostrar na tela"/>
+                                                    </StackPanel>
+                                                </Button>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- Execution settings -->
+                                    <Border Style="{StaticResource Card}" Padding="16" Margin="0,0,0,12">
+                                        <StackPanel>
+                                            <TextBlock Text="Execução" Style="{StaticResource SectionTitle}" Margin="0,0,0,10"/>
+
+                                            <TextBlock Text="Método de envio" Style="{StaticResource FieldLabel}"/>
+                                            <ComboBox x:Name="CmbBgMethod" SelectionChanged="CmbBgMethod_SelectionChanged">
+                                                <ComboBoxItem Content="Mensagens de janela"/>
+                                                <ComboBoxItem Content="Mensagens síncronas"/>
+                                                <ComboBoxItem Content="UI Automation"/>
+                                                <ComboBoxItem Content="Modo compatível"/>
+                                            </ComboBox>
+                                            <TextBlock x:Name="TxtBgMethodHint" Text="" FontSize="11" Foreground="{StaticResource TextMutedBrush}" TextWrapping="Wrap" Margin="0,6,0,12"/>
+
+                                            <Grid Margin="0,0,0,10">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="90"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="Intervalo entre ciclos (ms)" Style="{StaticResource InlineLabel}" FontSize="12" TextWrapping="Wrap"/>
+                                                <TextBox x:Name="TxtBgInterval" Grid.Column="1" Text="1000" TextAlignment="Center"/>
+                                            </Grid>
+                                            <Grid Margin="0,0,0,10">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="90"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="Ciclos (0 = sem fim)" Style="{StaticResource InlineLabel}" FontSize="12"/>
+                                                <TextBox x:Name="TxtBgCycles" Grid.Column="1" Text="0" TextAlignment="Center"/>
+                                            </Grid>
+
+                                            <TextBlock Text="Clique padrão para novos pontos" Style="{StaticResource FieldLabel}"/>
+                                            <ComboBox x:Name="CmbBgDefaultKind" Margin="0,0,0,12">
+                                                <ComboBoxItem Content="Esquerdo" IsSelected="True"/>
+                                                <ComboBoxItem Content="Direito"/>
+                                                <ComboBoxItem Content="Meio"/>
+                                                <ComboBoxItem Content="Duplo clique"/>
+                                            </ComboBox>
+
+                                            <CheckBox x:Name="ChkBgSendMove" Content="Enviar movimento do mouse antes do clique" IsChecked="True" FontSize="12"/>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- Limitations -->
+                                    <Border Style="{StaticResource Card}" Padding="16" Margin="0">
+                                        <StackPanel>
+                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                                <TextBlock Text="&#xE946;" Style="{StaticResource Icon}" FontSize="13" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,8,0"/>
+                                                <TextBlock Text="Limitações" Style="{StaticResource SectionTitle}"/>
+                                            </StackPanel>
+                                            <TextBlock FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap" LineHeight="16">
+                                                • Jogos e programas com DirectX/OpenGL geralmente leem o mouse direto do hardware e ignoram cliques em segundo plano. Nesses casos use o Modo compatível.<LineBreak/>
+                                                • Programas abertos como administrador só aceitam cliques se o Gabriel Autoclick também for aberto como administrador.<LineBreak/>
+                                                • Alguns programas não reagem enquanto estão minimizados.<LineBreak/>
+                                                • Zonas protegidas não se aplicam aqui, pois o cursor não é usado.
+                                            </TextBlock>
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Grid>
+                    </Grid>
+
                     <!-- =================== ZONAS PROTEGIDAS =================== -->
                     <ScrollViewer x:Name="ViewSafeZones" Style="{StaticResource PageScroll}" Visibility="Collapsed">
                         <StackPanel MaxWidth="980">
@@ -1014,6 +1258,40 @@
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
                                         <StackPanel VerticalAlignment="Center">
+                                            <TextBlock Text="Iniciar / parar clique em segundo plano" FontWeight="SemiBold"/>
+                                            <TextBlock Text="Liga ou desliga os cliques na janela escolhida." Style="{StaticResource SectionHint}"/>
+                                        </StackPanel>
+                                        <Border Grid.Column="1" Style="{StaticResource KeyCap}" VerticalAlignment="Center" Margin="16,0,12,0">
+                                            <TextBlock x:Name="TxtKeyBgToggle" Text="F10" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                                        </Border>
+                                        <Button Grid.Column="2" Click="BtnChangeHotkey_Click" Tag="BackgroundToggle" Content="Alterar" Style="{StaticResource SecondaryButton}"/>
+                                    </Grid>
+                                    <Border Height="1" Background="{StaticResource BorderBrush}"/>
+
+                                    <Grid Margin="20,14">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel VerticalAlignment="Center">
+                                            <TextBlock Text="Pausar / continuar clique em segundo plano" FontWeight="SemiBold"/>
+                                            <TextBlock Text="Pausa sem perder a contagem e retoma de onde parou." Style="{StaticResource SectionHint}"/>
+                                        </StackPanel>
+                                        <Border Grid.Column="1" Style="{StaticResource KeyCap}" VerticalAlignment="Center" Margin="16,0,12,0">
+                                            <TextBlock x:Name="TxtKeyBgPause" Text="F11" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                                        </Border>
+                                        <Button Grid.Column="2" Click="BtnChangeHotkey_Click" Tag="BackgroundPause" Content="Alterar" Style="{StaticResource SecondaryButton}"/>
+                                    </Grid>
+                                    <Border Height="1" Background="{StaticResource BorderBrush}"/>
+
+                                    <Grid Margin="20,14">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel VerticalAlignment="Center">
                                             <TextBlock Text="Parar tudo" FontWeight="SemiBold"/>
                                             <TextBlock Text="Interrompe imediatamente cliques, macros e sequências. Fixo por segurança." Style="{StaticResource SectionHint}"/>
                                         </StackPanel>
@@ -1186,8 +1464,12 @@
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
                                 <Grid.RowDefinitions>
-                                    <RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/>
+                                    <RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/>
                                 </Grid.RowDefinitions>
+                                <TextBlock Grid.Row="5" Text="Iniciar / parar segundo plano" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,2"/>
+                                <TextBlock Grid.Row="5" Grid.Column="1" Text="F10" FontWeight="SemiBold" Margin="0,2"/>
+                                <TextBlock Grid.Row="6" Text="Pausar / continuar segundo plano" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,2"/>
+                                <TextBlock Grid.Row="6" Grid.Column="1" Text="F11" FontWeight="SemiBold" Margin="0,2"/>
                                 <TextBlock Grid.Row="0" Text="Iniciar / parar autoclick" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,2"/>
                                 <TextBlock Grid.Row="0" Grid.Column="1" Text="F6" FontWeight="SemiBold" Margin="0,2"/>
                                 <TextBlock Grid.Row="1" Text="Selecionar posição" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,2"/>
