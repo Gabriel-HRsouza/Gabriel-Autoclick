@@ -1,0 +1,49 @@
+{
+  "StartWithWindows": false,
+  "MinimizeToTray": true,
+  "AlwaysOnTop": false,
+  "AutoSaveSettings": true,
+  "PlaySoundStart": true,
+  "PlaySoundStop": true,
+  "ShowNotifications": true,
+  "WallpaperEnabled": true,
+  "WallpaperDarkness": 0.78,
+  "SafeIntervalMinMs": 10,
+  "AutoPauseOnWindowChange": false,
+  "AutoPauseOnLock": true,
+  "AutoPauseOnTargetClose": true,
+  "StopOnSafeZone": false,
+  "Hotkeys": {
+    "ToggleAutoclick": {
+      "Name": "Iniciar / Parar Autoclick",
+      "Description": "Alterna a execução do autoclicker",
+      "Key": 65,
+      "Modifiers": 0
+    },
+    "SelectPosition": {
+      "Name": "Selecionar Posição",
+      "Description": "Abre a mira na tela para capturar coordenada",
+      "Key": 66,
+      "Modifiers": 0
+    },
+    "StartMacro": {
+      "Name": "Iniciar Macro",
+      "Description": "Inicia a reprodução da macro carregada",
+      "Key": 67,
+      "Modifiers": 0
+    },
+    "StopMacro": {
+      "Name": "Parar Macro",
+      "Description": "Para a execução da macro",
+      "Key": 68,
+      "Modifiers": 0
+    },
+    "Panic": {
+      "Name": "Panic Button",
+      "Description": "Interrompe imediatamente qualquer clique, macro ou timer",
+      "Key": 71,
+      "Modifiers": 0
+    }
+  },
+  "SafeZones": []
+}

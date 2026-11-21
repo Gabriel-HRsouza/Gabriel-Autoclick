@@ -1,0 +1,51 @@
+<Window x:Class="GabrielAutoclick.Views.SafeZonePickerOverlay"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Desenhar zona protegida"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="#26000000"
+        Topmost="True"
+        ShowInTaskbar="False"
+        WindowState="Maximized"
+        Cursor="Cross"
+        FontFamily="Segoe UI"
+        KeyDown="Window_KeyDown"
+        MouseMove="Window_MouseMove"
+        MouseDown="Window_MouseDown"
+        MouseUp="Window_MouseUp">
+    <Canvas x:Name="OverlayCanvas">
+        <!-- Instructions -->
+        <Border Canvas.Left="40" Canvas.Top="32"
+                Background="#F21B1F24"
+                BorderBrush="#3A414B"
+                BorderThickness="1"
+                CornerRadius="8"
+                Padding="18,12">
+            <StackPanel>
+                <TextBlock Text="Desenhar zona protegida" Foreground="#E8EAED" FontSize="14" FontWeight="SemiBold"/>
+                <TextBlock Text="Clique e arraste para marcar a área. Esc cancela." Foreground="#A1A7B0" FontSize="12" Margin="0,3,0,0"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Selection -->
+        <Rectangle x:Name="SelectionRect"
+                   Fill="#334C8DFF"
+                   Stroke="#4C8DFF"
+                   StrokeThickness="1.5"
+                   Visibility="Collapsed"/>
+
+        <!-- Size readout -->
+        <Border x:Name="InfoHud"
+                Background="#F21B1F24"
+                BorderBrush="#3A414B"
+                BorderThickness="1"
+                CornerRadius="6"
+                Padding="10,6"
+                Canvas.Left="0" Canvas.Top="0"
+                Visibility="Collapsed"
+                IsHitTestVisible="False">
+            <TextBlock x:Name="TxtInfo" Text="X: 0, Y: 0 | W: 0, H: 0" Foreground="#E8EAED" FontSize="12"/>
+        </Border>
+    </Canvas>
+</Window>
