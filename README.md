@@ -1,55 +1,55 @@
-# ⚡ GABRIEL AUTOCLICK - Advanced Mouse Automation
+#  GABRIEL AUTOCLICK - Advanced Mouse Automation
 
 > **Autoclicker profissional, completo e moderno para Windows 10 e Windows 11 (x64).**  
 > Desenvolvido em **C# / WPF / .NET 8**, utilizando Windows API nativa (`SendInput`, `GetCursorPos`, Global Hotkeys, Low-Level Hooks).
 
 ---
 
-## 🌟 Visão Geral
+##  Visão Geral
 
 O **Gabriel Autoclick** foi projetado para superar autoclickers convencionais (como OP Auto Clicker e GS Auto Clicker), unindo **máxima precisão de cliques**, **design moderno glassmorphic** com papel de parede personalizado, e um conjunto avançado de funcionalidades para produtividade e jogos (Roblox, Blox Fruits, Minecraft PvP, MMORPGs, testes de software e automações corporativas).
 
 ---
 
-## 🔥 Funcionalidades Principais
+##  Funcionalidades Principais
 
-### 1. 🎯 Modos de Posicionamento do Clique
-- **🔥 Modo Seguir Cursor (Diferencial Principal)**: O clique acompanha em tempo real o ponteiro do mouse sem reposicionamento artificial e sem travar o movimento. A cada iteração, `GetCursorPos` é consultado dinamicamente — mesmo com o aplicativo minimizado.
+### 1.  Modos de Posicionamento do Clique
+- ** Modo Seguir Cursor (Diferencial Principal)**: O clique acompanha em tempo real o ponteiro do mouse sem reposicionamento artificial e sem travar o movimento. A cada iteração, `GetCursorPos` é consultado dinamicamente — mesmo com o aplicativo minimizado.
 - **Posição Atual**: Captura a coordenada exata onde o mouse estava no instante em que o clique foi iniciado.
 - **Ponto Fixo na Tela**: Permite digitar coordenadas `(X, Y)` ou capturá-las interativamente através da **Mira na Tela** (`F7`).
 
-### 2. ⚡ Alta Precisão & Controle de Intervalo
+### 2.  Alta Precisão & Controle de Intervalo
 - **Configuração Completa**: Horas, Minutos, Segundos e Milissegundos (`00:00:00:100`).
 - **Conversor em Tempo Real de CPS (Clicks Per Second)**: Altere o CPS (ex: `10 CPS`, `20 CPS`) e o tempo em milissegundos é recalculado instantaneamente.
 - **Presets Rápidos**: Botões de 1, 5, 10, 20, 50 e 100 CPS.
 - **Proteção contra travamento**: Limite mínimo seguro configurável para evitar sobrecarga do sistema.
 
-### 3. 💥 Burst Mode (Rajada de Cliques)
+### 3.  Burst Mode (Rajada de Cliques)
 - Configure número de cliques por rajada (ex: `5 cliques`), intervalo entre cada clique (`50 ms`) e tempo de espera entre rajadas (`1000 ms`).
 
-### 4. 🎲 Randomização Humanizada
+### 4.  Randomização Humanizada
 - **Intervalo Aleatório**: Define limites mínimo e máximo (ex: `80 ms - 150 ms`) gerando intervalos imprevisíveis para evitar bloqueios anti-cheat.
 - **Randomização de Posição (Jitter)**: Adiciona uma variação aleatória de pixels dentro de um raio configurável (ex: `±3 px`).
 
-### 5. 🎯 Multi Point Clicker (Multi Click)
+### 5.  Multi Point Clicker (Multi Click)
 - Tabela interativa para sequenciar múltiplos pontos na tela com tempos de espera e botões específicos:
   $$\text{Ponto 1 } (X_1, Y_1) \longrightarrow \text{Ponto 2 } (X_2, Y_2) \longrightarrow \text{Ponto 3 } (X_3, Y_3) \dots$$
 - Suporta repetição em loop contínuo ou número fixo de ciclos.
 
-### 6. 🎬 Macro Recorder & Player
+### 6.  Macro Recorder & Player
 - Gravador global via `WH_MOUSE_LL` para registrar coordenadas, cliques, descidas/subidas de botão e tempos de espera.
 - Reprodução com multiplicador de velocidade (`0.5x`, `1.0x`, `1.5x`, `2.0x`, `3.0x`).
 - Exportação e importação de sequências em formato JSON.
 
-### 7. 🛡️ Safe Zones (Zonas Protegidas)
+### 7.  Safe Zones (Zonas Protegidas)
 - Crie zonas retangulares na tela onde cliques são proibidos (ex: botão de fechar aplicativo, barra de tarefas, chat).
 - Desenhe as áreas diretamente sobre a tela através do seletor visual integrado.
 
-### 8. 🪟 Restrição por Janela Ativa
+### 8.  Restrição por Janela Ativa
 - Escolha uma janela aberta (ex: `Roblox`, `Discord`, `Chrome`, `Notepad`).
 - O Gabriel Autoclick só clica quando a janela alvo estiver focada no primeiro plano, pausando automaticamente ao trocar de janela.
 
-### 9. 🗗 Mini Mode (HUD Flutuante)
+### 9.  Mini Mode (HUD Flutuante)
 - Modo compacto e flutuante contendo indicador de status, CPS atual e botão de Iniciar/Parar.
 - Pode ser arrastado livremente e mantido sempre sobre outras telas (`Always on Top`).
 
@@ -59,9 +59,9 @@ O **Gabriel Autoclick** foi projetado para superar autoclickers convencionais (c
   - **`F7`**: Abrir Mira para Selecionar Ponto
   - **`F8`**: Iniciar Reprodução de Macro
   - **`F9`**: Parar Macro
-  - **`F12` ou `ESC`**: 🚨 **PANIC BUTTON** — Interrompe imediatamente qualquer clique, macro, timer ou sequência ativa.
+  - **`F12` ou `ESC`**:  **PANIC BUTTON** — Interrompe imediatamente qualquer clique, macro, timer ou sequência ativa.
 
-### 11. 📁 Sistema de Perfis
+### 11.  Sistema de Perfis
 - Perfis prontos inclusos:
   - **Blox Fruits (Farm)**: 12 CPS com Follow Cursor
   - **Minecraft PvP**: Cliques rápidos com randomização de intervalo e jitter
@@ -69,7 +69,7 @@ O **Gabriel Autoclick** foi projetado para superar autoclickers convencionais (c
   - **Trabalho (Auto-Refresh)**: 1 clique a cada 5 segundos em ponto fixo
 - Crie, duplique, salve, importe e exporte seus próprios perfis em JSON.
 
-### 12. 📈 Painel de Estatísticas
+### 12.  Painel de Estatísticas
 - Contador de cliques na sessão e lifetime acumulado.
 - Tempo ativo, CPS médio, maior CPS registrado e macros executadas.
 - Persistência automática em `%APPDATA%\GabrielAutoclick\statistics.json`.
@@ -183,7 +183,7 @@ release\GabrielAutoclick.exe
 | **`F7`** | **Selecionar Posição** | Abre a mira na tela para capturar coordenada `(X,Y)` |
 | **`F8`** | **Iniciar Macro** | Inicia a reprodução da macro gravada |
 | **`F9`** | **Parar Macro** | Interrompe a reprodução da macro |
-| **`F12` / `ESC`** | **🚨 Panic Button** | Interrompe imediatamente qualquer clique, macro ou timer |
+| **`F12` / `ESC`** | ** Panic Button** | Interrompe imediatamente qualquer clique, macro ou timer |
 
 ---
 
