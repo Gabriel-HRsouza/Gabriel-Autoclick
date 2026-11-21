@@ -7,7 +7,7 @@ namespace GabrielAutoclick.Helpers
     {
         public const string AppName = "Gabriel Autoclick";
         public const string AppSubtitle = "Advanced Mouse Automation";
-        public const string AppVersion = "1.0.0";
+        public const string AppVersion = "1.1.0";
 
         public static readonly string AppDataFolder = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),

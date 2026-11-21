@@ -1,0 +1,57 @@
+name: Build & Publish Windows Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Tag da versão para publicar (ex: v1.1.0)'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    name: Build Windows x64 Single-File & Release
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8.0 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build & Package Release (PowerShell)
+        shell: pwsh
+        run: |
+          ./build-release.ps1 -NoPause
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GabrielAutoclick-win-x64
+          path: |
+            release/GabrielAutoclick.exe
+            release/GabrielAutoclick-win-x64.zip
+            release/Instalar-GabrielAutoclick.bat
+            release/SHA256SUMS.txt
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/GabrielAutoclick.exe
+            release/GabrielAutoclick-win-x64.zip
+            release/Instalar-GabrielAutoclick.bat
+            release/SHA256SUMS.txt
+          generate_release_notes: true
+          draft: false
+          prerelease: false
