@@ -14,9 +14,14 @@ bld/
 [Ll]og/
 [Ll]ogs/
 
-# Release output folders & test artifacts
+# Release output folders, binaries & test artifacts
 release/
 release-test/
+publish/
+*.exe
+*.dll
+*.pdb
+*.zip
 output.txt
 read-log.ps1
 *.tmp
