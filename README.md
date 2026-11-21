@@ -53,7 +53,7 @@ O **Gabriel Autoclick** foi projetado para superar autoclickers convencionais (c
 - Modo compacto e flutuante contendo indicador de status, CPS atual e botão de Iniciar/Parar.
 - Pode ser arrastado livremente e mantido sempre sobre outras telas (`Always on Top`).
 
-### 10. ⌨️ Global Hotkeys & Panic Button
+### 10.  Global Hotkeys & Panic Button
 - Funciona globalmente mesmo com a janela minimizada ou em segundo plano:
   - **`F6`**: Iniciar / Parar Autoclicker
   - **`F7`**: Abrir Mira para Selecionar Ponto
@@ -139,7 +139,7 @@ GabrielAutoclick/
 
 ---
 
-## 🛠️ Como Executar em Desenvolvimento
+##  Como Executar em Desenvolvimento
 
 ### Pré-requisitos
 - **Windows 10 ou Windows 11 (64-bit)**
@@ -153,7 +153,7 @@ dotnet run --project GabrielAutoclick/GabrielAutoclick.csproj
 
 ---
 
-## 📦 Como Gerar o Executável (.EXE)
+##  Como Gerar o Executável (.EXE)
 
 Para compilar a versão final independente (Self-Contained Single-File) que funciona em qualquer computador Windows sem necessidade de instalar o .NET ou Visual Studio:
 
@@ -175,7 +175,7 @@ release\GabrielAutoclick.exe
 
 ---
 
-## ⌨️ Tabela de Atalhos Padrão
+##  Tabela de Atalhos Padrão
 
 | Atalho | Função | Descrição |
 |---|---|---|
@@ -187,7 +187,7 @@ release\GabrielAutoclick.exe
 
 ---
 
-## 🔒 Diretórios de Configuração e Dados
+##  Diretórios de Configuração e Dados
 O aplicativo salva automaticamente todas as configurações, perfis e estatísticas de forma limpa em:
 - `%APPDATA%\GabrielAutoclick\settings.json`
 - `%APPDATA%\GabrielAutoclick\profiles.json`
@@ -196,7 +196,7 @@ O aplicativo salva automaticamente todas as configurações, perfis e estatísti
 
 ---
 
-## 🛡️ Solução de Problemas (Troubleshooting)
+##  Solução de Problemas (Troubleshooting)
 
 1. **O clique não ocorre dentro de jogos que executam como Administrador:**
    - Execute o `GabrielAutoclick.exe` como Administrador para que a API `SendInput` tenha privilégios de enviar eventos para o jogo elevado.
