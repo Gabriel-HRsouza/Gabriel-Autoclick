@@ -144,14 +144,22 @@
                                         <TextBlock x:Name="TxtDashShortcutHint" Text="F6 inicia ou para  ·  F12 interrompe tudo" FontSize="12" Foreground="{StaticResource TextMutedBrush}" Margin="20,10,0,0"/>
                                     </StackPanel>
 
-                                    <Button Grid.Column="2" x:Name="BtnMainToggle" Click="BtnMainToggle_Click"
-                                            Style="{StaticResource PrimaryButton}" Width="210" Height="46" FontSize="14"
-                                            VerticalAlignment="Center">
-                                        <StackPanel Orientation="Horizontal">
-                                            <TextBlock x:Name="TxtMainActionIcon" Text="&#xE768;" Style="{StaticResource Icon}" FontSize="13" Margin="0,0,10,0"/>
-                                            <TextBlock x:Name="TxtMainActionText" Text="Iniciar autoclick"/>
-                                        </StackPanel>
-                                    </Button>
+                                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <Button x:Name="BtnMainPause" Click="BtnMainPause_Click" Style="{StaticResource SecondaryButton}"
+                                                Width="130" Height="46" FontSize="14" Margin="0,0,10,0" Visibility="Collapsed">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock x:Name="TxtMainPauseIcon" Text="&#xE769;" Style="{StaticResource Icon}" FontSize="13" Margin="0,0,10,0"/>
+                                                <TextBlock x:Name="TxtMainPauseText" Text="Pausar"/>
+                                            </StackPanel>
+                                        </Button>
+                                        <Button x:Name="BtnMainToggle" Click="BtnMainToggle_Click"
+                                                Style="{StaticResource PrimaryButton}" Width="210" Height="46" FontSize="14">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock x:Name="TxtMainActionIcon" Text="&#xE768;" Style="{StaticResource Icon}" FontSize="13" Margin="0,0,10,0"/>
+                                                <TextBlock x:Name="TxtMainActionText" Text="Iniciar autoclick"/>
+                                            </StackPanel>
+                                        </Button>
+                                    </StackPanel>
                                 </Grid>
                             </Border>
 
@@ -568,12 +576,20 @@
                             <TextBox x:Name="TxtMultiLoops" Grid.Column="1" Text="0" TextAlignment="Center"/>
                             <TextBlock x:Name="TxtMultiStatus" Grid.Column="2" Text="Nenhum ponto cadastrado." Style="{StaticResource InlineLabel}"
                                        Foreground="{StaticResource TextMutedBrush}" Margin="16,0" TextTrimming="CharacterEllipsis"/>
-                            <Button x:Name="BtnToggleMulti" Grid.Column="3" Click="BtnToggleMulti_Click" Style="{StaticResource PrimaryButton}" MinWidth="170" Height="38">
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock x:Name="TxtMultiIcon" Text="&#xE768;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,8,0"/>
-                                    <TextBlock x:Name="TxtMultiText" Text="Iniciar sequência"/>
-                                </StackPanel>
-                            </Button>
+                            <StackPanel Grid.Column="3" Orientation="Horizontal">
+                                <Button x:Name="BtnPauseMulti" Click="BtnPauseMulti_Click" Style="{StaticResource SecondaryButton}" MinWidth="120" Height="38" Margin="0,0,8,0" Visibility="Collapsed">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock x:Name="TxtMultiPauseIcon" Text="&#xE769;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,8,0"/>
+                                        <TextBlock x:Name="TxtMultiPauseText" Text="Pausar"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button x:Name="BtnToggleMulti" Click="BtnToggleMulti_Click" Style="{StaticResource PrimaryButton}" MinWidth="170" Height="38">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock x:Name="TxtMultiIcon" Text="&#xE768;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,8,0"/>
+                                        <TextBlock x:Name="TxtMultiText" Text="Iniciar sequência"/>
+                                    </StackPanel>
+                                </Button>
+                            </StackPanel>
                         </Grid>
                     </Grid>
 
@@ -614,37 +630,34 @@
                                             <TextBlock Text="Parar"/>
                                         </StackPanel>
                                     </Button>
-                                    <Button x:Name="BtnPlayMacro" Click="BtnPlayMacro_Click" Style="{StaticResource PrimaryButton}" MinWidth="120">
+                                    <Button x:Name="BtnPlayMacro" Click="BtnPlayMacro_Click" Style="{StaticResource PrimaryButton}" MinWidth="120" Margin="0,0,8,0">
                                         <StackPanel Orientation="Horizontal">
                                             <TextBlock Text="&#xE768;" Style="{StaticResource Icon}" FontSize="11" Margin="0,0,8,0"/>
                                             <TextBlock Text="Reproduzir"/>
                                         </StackPanel>
                                     </Button>
+                                    <Button x:Name="BtnPauseMacro" Click="BtnPauseMacro_Click" Style="{StaticResource SecondaryButton}" MinWidth="110" IsEnabled="False">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock x:Name="TxtMacroPauseIcon" Text="&#xE769;" Style="{StaticResource Icon}" FontSize="11" Margin="0,0,8,0"/>
+                                            <TextBlock x:Name="TxtMacroPauseText" Text="Pausar"/>
+                                        </StackPanel>
+                                    </Button>
                                 </StackPanel>
 
-                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="18,0">
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0" ClipToBounds="True">
                                     <Ellipse x:Name="MacroStatusDot" Width="8" Height="8" Fill="{StaticResource TextMutedBrush}" Margin="0,0,8,0" VerticalAlignment="Center"/>
                                     <TextBlock x:Name="TxtMacroStatus" Text="Pronto" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                                 </StackPanel>
 
                                 <StackPanel Grid.Column="2" Orientation="Horizontal">
-                                    <Button Click="BtnSaveMacro_Click" Style="{StaticResource GhostButton}" ToolTip="Salvar macro em arquivo" Padding="10,0">
-                                        <StackPanel Orientation="Horizontal">
-                                            <TextBlock Text="&#xE74E;" Style="{StaticResource Icon}" FontSize="13" Margin="0,0,8,0"/>
-                                            <TextBlock Text="Salvar"/>
-                                        </StackPanel>
+                                    <Button Click="BtnSaveMacro_Click" Style="{StaticResource GhostButton}" ToolTip="Salvar macro em arquivo" Padding="0" Width="36">
+                                        <TextBlock Text="&#xE74E;" Style="{StaticResource Icon}" FontSize="14"/>
                                     </Button>
-                                    <Button Click="BtnLoadMacro_Click" Style="{StaticResource GhostButton}" ToolTip="Abrir macro salva" Padding="10,0">
-                                        <StackPanel Orientation="Horizontal">
-                                            <TextBlock Text="&#xE8E5;" Style="{StaticResource Icon}" FontSize="13" Margin="0,0,8,0"/>
-                                            <TextBlock Text="Abrir"/>
-                                        </StackPanel>
+                                    <Button Click="BtnLoadMacro_Click" Style="{StaticResource GhostButton}" ToolTip="Abrir macro salva" Padding="0" Width="36">
+                                        <TextBlock Text="&#xE8E5;" Style="{StaticResource Icon}" FontSize="14"/>
                                     </Button>
-                                    <Button x:Name="BtnClearMacro" Click="BtnClearMacro_Click" Style="{StaticResource GhostButton}" ToolTip="Apagar todas as ações" Padding="10,0">
-                                        <StackPanel Orientation="Horizontal">
-                                            <TextBlock Text="&#xE74D;" Style="{StaticResource Icon}" FontSize="13" Margin="0,0,8,0"/>
-                                            <TextBlock Text="Limpar"/>
-                                        </StackPanel>
+                                    <Button x:Name="BtnClearMacro" Click="BtnClearMacro_Click" Style="{StaticResource GhostButton}" ToolTip="Apagar todas as ações" Padding="0" Width="36">
+                                        <TextBlock Text="&#xE74D;" Style="{StaticResource Icon}" FontSize="14"/>
                                     </Button>
                                 </StackPanel>
                             </Grid>
@@ -937,6 +950,7 @@
                                                 • Jogos e programas com DirectX/OpenGL geralmente leem o mouse direto do hardware e ignoram cliques em segundo plano. Nesses casos use o Modo compatível.<LineBreak/>
                                                 • Programas abertos como administrador só aceitam cliques se o Gabriel Autoclick também for aberto como administrador.<LineBreak/>
                                                 • Alguns programas não reagem enquanto estão minimizados.<LineBreak/>
+                                                • Alguns programas (ex.: feitos em WinForms) só aceitam o clique se o ponto estiver visível. Você pode usar outros programas, desde que não cubram exatamente o ponto escolhido.<LineBreak/>
                                                 • Zonas protegidas não se aplicam aqui, pois o cursor não é usado.
                                             </TextBlock>
                                         </StackPanel>

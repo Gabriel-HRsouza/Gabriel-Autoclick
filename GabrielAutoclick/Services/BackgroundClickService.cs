@@ -16,7 +16,9 @@ namespace GabrielAutoclick.Services
     {
         Stopped = 0,
         Running = 1,
-        Paused = 2
+        Paused = 2,
+        /// <summary>Completed the configured number of cycles.</summary>
+        Finished = 3
     }
 
     /// <summary>
@@ -37,42 +39,47 @@ namespace GabrielAutoclick.Services
     public class BackgroundClickService
     {
         private readonly StatisticsService _statisticsService;
-        private readonly object _lock = new object();
-        private readonly ManualResetEventSlim _resumeSignal = new ManualResetEventSlim(true);
-        private CancellationTokenSource? _cts;
+        private readonly RunController _runner = new RunController("Background");
         private static readonly uint OwnProcessId = (uint)Environment.ProcessId;
 
-        public BackgroundRunState State { get; private set; } = BackgroundRunState.Stopped;
-        public bool IsActive => State != BackgroundRunState.Stopped;
+        /// <summary>How long every target window may stay closed before the run gives up.</summary>
+        private const int ClosedWindowGraceMs = 15000;
+
+        public BackgroundRunState State => _runner.State switch
+        {
+            RunState.Running => BackgroundRunState.Running,
+            RunState.Paused => BackgroundRunState.Paused,
+            RunState.Finished => BackgroundRunState.Finished,
+            _ => BackgroundRunState.Stopped
+        };
+
+        public bool IsActive => _runner.IsActive;
         public long ClicksSent { get; private set; }
         public int CompletedCycles { get; private set; }
 
         public event Action<BackgroundRunState>? StateChanged;
         public event Action<string>? StatusUpdated;
-        /// <summary>Raised when automation stops because of an error (e.g. every target window was closed).</summary>
+        /// <summary>Raised when automation stops because of a real, unrecoverable failure.</summary>
         public event Action<string>? ErrorOccurred;
         public event Action<long, int>? ProgressUpdated;
 
         public BackgroundClickService(StatisticsService statisticsService)
         {
             _statisticsService = statisticsService;
+            _runner.StateChanged += _ => StateChanged?.Invoke(State);
+            _runner.Failed += msg =>
+            {
+                StatusUpdated?.Invoke("Parado: " + msg);
+                ErrorOccurred?.Invoke(msg);
+                SoundService.PlayPanicSound();
+            };
         }
 
         #region Run control
 
         public void Start(IList<BackgroundClickPoint> points, BackgroundClickSettings settings)
         {
-            CancellationTokenSource cts;
-            lock (_lock)
-            {
-                if (IsActive || points.Count == 0) return;
-                cts = new CancellationTokenSource();
-                _cts = cts;
-                _resumeSignal.Set();
-                ClicksSent = 0;
-                CompletedCycles = 0;
-                State = BackgroundRunState.Running;
-            }
+            if (_runner.IsActive || points.Count == 0) return;
 
             var snapshot = points.ToList();
             var cfg = new BackgroundClickSettings
@@ -83,154 +90,137 @@ namespace GabrielAutoclick.Services
                 SendMouseMove = settings.SendMouseMove
             };
 
-            LoggerService.Log($"[BG] Início: {snapshot.Count} ponto(s), método={cfg.Method}, intervalo={cfg.IntervalMs}ms, ciclos={cfg.Cycles}");
-            StateChanged?.Invoke(State);
-            StatusUpdated?.Invoke("Clicando em segundo plano");
-            SoundService.PlayStartSound();
+            ClicksSent = 0;
+            CompletedCycles = 0;
+            ProgressUpdated?.Invoke(0, 0);
 
-            var thread = new Thread(() => RunLoop(snapshot, cfg, cts)) { IsBackground = true, Name = "BackgroundClick" };
-            thread.Start();
+            if (_runner.TryStart(ctx => RunLoop(ctx, snapshot, cfg)))
+            {
+                LoggerService.Log($"[BG] Início: {snapshot.Count} ponto(s), método={cfg.Method}, intervalo={cfg.IntervalMs}ms, ciclos={cfg.Cycles}");
+                StatusUpdated?.Invoke("Clicando em segundo plano");
+                SoundService.PlayStartSound();
+            }
         }
 
         public void Stop()
         {
-            lock (_lock)
-            {
-                if (!IsActive) return;
-                _cts?.Cancel();
-                _resumeSignal.Set();
-            }
+            if (!_runner.IsActive) return;
+            _runner.Stop();
+            StatusUpdated?.Invoke("Parado");
             SoundService.PlayStopSound();
         }
 
         public void TogglePause()
         {
-            lock (_lock)
+            if (_runner.State == RunState.Paused)
             {
-                if (State == BackgroundRunState.Running)
-                {
-                    State = BackgroundRunState.Paused;
-                    _resumeSignal.Reset();
-                }
-                else if (State == BackgroundRunState.Paused)
-                {
-                    State = BackgroundRunState.Running;
-                    _resumeSignal.Set();
-                }
-                else return;
+                if (_runner.Resume()) StatusUpdated?.Invoke("Clicando em segundo plano");
             }
-
-            StateChanged?.Invoke(State);
-            StatusUpdated?.Invoke(State == BackgroundRunState.Paused ? "Pausado" : "Clicando em segundo plano");
-        }
-
-        public void Panic()
-        {
-            lock (_lock)
+            else if (_runner.Pause())
             {
-                _cts?.Cancel();
-                _resumeSignal.Set();
+                StatusUpdated?.Invoke("Pausado");
             }
         }
 
-        private void RunLoop(List<BackgroundClickPoint> points, BackgroundClickSettings cfg, CancellationTokenSource cts)
+        public void Panic() => _runner.Stop();
+
+        /// <summary>
+        /// Failure policy:
+        ///  - temporary problems (window covered, minimized, busy, element not found) never stop the
+        ///    run: the point is marked and retried on the next cycle;
+        ///  - a closed window is searched again every cycle (the program may be reopened); the run
+        ///    only stops if every target stays closed for ClosedWindowGraceMs;
+        ///  - permanent errors (target runs as administrator, method can't do that click type) stop
+        ///    the run with an explanation, since retrying can never succeed.
+        /// </summary>
+        private void RunLoop(RunContext ctx, List<BackgroundClickPoint> points, BackgroundClickSettings cfg)
         {
-            var ct = cts.Token;
-            string? stopError = null;
+            var allClosedSince = new Stopwatch();
+            string? lastNotice = null;
 
-            try
+            void Notice(string msg)
             {
-                while (!ct.IsCancellationRequested)
-                {
-                    int okThisCycle = 0;
-                    string? lastError = null;
+                if (msg == lastNotice) return;
+                lastNotice = msg;
+                StatusUpdated?.Invoke(msg);
+            }
 
-                    for (int i = 0; i < points.Count; i++)
+            while (ctx.WaitIfPaused())
+            {
+                int delivered = 0, closed = 0;
+
+                for (int i = 0; i < points.Count; i++)
+                {
+                    var p = points[i];
+                    if (!ctx.Sleep(p.DelayMs)) return;
+
+                    if (!EnsureWindow(p, out _))
                     {
-                        var p = points[i];
-                        if (!WaitInterruptible(p.DelayMs, ct)) return;
-
-                        if (!EnsureWindow(p, out string resolveError))
-                        {
-                            p.Status = resolveError;
-                            lastError = $"Ponto {p.Index}: {resolveError}";
-                            continue;
-                        }
-
-                        if (SendClick(p, cfg.Method, cfg.SendMouseMove, out string error))
-                        {
-                            okThisCycle++;
-                            ClicksSent++;
-                            _statisticsService.RegisterClick();
-                            if (p.Status != "OK") p.Status = "OK";
-                        }
-                        else
-                        {
-                            p.Status = error;
-                            lastError = $"Ponto {p.Index}: {error}";
-                        }
+                        closed++;
+                        p.Status = "Janela fechada - aguardando reabrir";
+                        continue;
                     }
 
-                    // A full cycle without a single delivered click means nothing can work anymore
-                    if (okThisCycle == 0)
+                    if (SendClick(p, cfg.Method, cfg.SendMouseMove, out string error, out bool permanent))
                     {
-                        stopError = lastError ?? "Nenhum clique pôde ser entregue.";
+                        delivered++;
+                        ClicksSent++;
+                        _statisticsService.RegisterClick();
+                        string status = IsPointCovered(p)
+                            ? "Enviado, mas o ponto está coberto por outra janela (alguns programas ignoram)"
+                            : "OK";
+                        if (p.Status != status) p.Status = status;
+                    }
+                    else if (permanent)
+                    {
+                        p.Status = error;
+                        ctx.Fail($"Ponto {p.Index}: {error}");
                         return;
                     }
-
-                    CompletedCycles++;
-                    ProgressUpdated?.Invoke(ClicksSent, CompletedCycles);
-                    if (lastError != null) StatusUpdated?.Invoke(lastError);
-
-                    if (cfg.Cycles > 0 && CompletedCycles >= cfg.Cycles) return;
-                    if (!WaitInterruptible(cfg.IntervalMs, ct)) return;
+                    else
+                    {
+                        p.Status = error + " (tentando de novo)";
+                        Notice($"Ponto {p.Index}: {error} Continuando a tentar.");
+                    }
                 }
-            }
-            catch (Exception ex)
-            {
-                LoggerService.LogException("[BG] Erro no loop de clique em segundo plano", ex);
-                stopError = "Erro inesperado: " + ex.Message;
-            }
-            finally
-            {
-                lock (_lock)
-                {
-                    State = BackgroundRunState.Stopped;
-                    if (ReferenceEquals(_cts, cts)) _cts = null;
-                    _resumeSignal.Set();
-                }
-                cts.Dispose();
 
-                LoggerService.Log($"[BG] Fim. Cliques={ClicksSent}, ciclos={CompletedCycles}, erro={stopError ?? "nenhum"}");
-                ProgressUpdated?.Invoke(ClicksSent, CompletedCycles);
-                StateChanged?.Invoke(BackgroundRunState.Stopped);
-
-                if (stopError != null)
+                if (closed == points.Count)
                 {
-                    StatusUpdated?.Invoke("Parado: " + stopError);
-                    ErrorOccurred?.Invoke(stopError);
-                    SoundService.PlayPanicSound();
+                    if (!allClosedSince.IsRunning)
+                    {
+                        allClosedSince.Restart();
+                        Notice("A janela alvo foi fechada. Aguardando ela ser aberta novamente...");
+                    }
+                    else if (allClosedSince.ElapsedMilliseconds >= ClosedWindowGraceMs)
+                    {
+                        ctx.Fail("A janela alvo foi fechada e não foi reaberta.");
+                        return;
+                    }
                 }
                 else
                 {
-                    StatusUpdated?.Invoke(cfg.Cycles > 0 && CompletedCycles >= cfg.Cycles ? "Concluído" : "Parado");
+                    if (allClosedSince.IsRunning)
+                    {
+                        allClosedSince.Reset();
+                        Notice("Janela encontrada novamente. Clicando em segundo plano");
+                    }
+                    else if (delivered == points.Count)
+                    {
+                        Notice("Clicando em segundo plano");
+                    }
                 }
-            }
-        }
 
-        /// <summary>Waits while honoring pause and cancellation. Returns false when cancelled.</summary>
-        private bool WaitInterruptible(int ms, CancellationToken ct)
-        {
-            try
-            {
-                _resumeSignal.Wait(ct);
-                if (ms > 0 && ct.WaitHandle.WaitOne(ms)) return false;
-                _resumeSignal.Wait(ct);
-                return !ct.IsCancellationRequested;
-            }
-            catch (OperationCanceledException)
-            {
-                return false;
+                CompletedCycles++;
+                ProgressUpdated?.Invoke(ClicksSent, CompletedCycles);
+
+                if (cfg.Cycles > 0 && CompletedCycles >= cfg.Cycles)
+                {
+                    StatusUpdated?.Invoke($"Concluído: {CompletedCycles} ciclo(s)");
+                    SoundService.PlayStopSound();
+                    return;
+                }
+
+                if (!ctx.Sleep(cfg.IntervalMs)) return;
             }
         }
 
@@ -238,28 +228,40 @@ namespace GabrielAutoclick.Services
 
         #region Target capture & validation
 
-        /// <summary>Builds a click point from a screen coordinate picked by the user.</summary>
+        [DllImport("dwmapi.dll")]
+        private static extern int DwmGetWindowAttribute(IntPtr hwnd, int attr, out int value, int size);
+        private const int DWMWA_CLOAKED = 14;
+
+        /// <summary>
+        /// Builds a click point from a screen coordinate picked by the user.
+        /// Gabriel Autoclick's own windows (main window, compact mode, picker overlay, highlight)
+        /// are never chosen: the topmost window of another program under the point is used instead.
+        /// </summary>
         public static BackgroundClickPoint? CaptureAt(int screenX, int screenY, out string error)
         {
             error = string.Empty;
             var pt = new NativeMethods.POINT(screenX, screenY);
+
+            IntPtr root = IntPtr.Zero;
             IntPtr hwnd = NativeMethods.WindowFromPoint(pt);
-            if (hwnd == IntPtr.Zero)
+            if (hwnd != IntPtr.Zero)
             {
-                error = "Nenhuma janela encontrada nesse ponto.";
-                return null;
+                root = NativeMethods.GetAncestor(hwnd, NativeMethods.GA_ROOT);
+                if (root == IntPtr.Zero) root = hwnd;
+                NativeMethods.GetWindowThreadProcessId(root, out uint hitPid);
+                if (hitPid == OwnProcessId) root = IntPtr.Zero;
             }
 
-            IntPtr root = NativeMethods.GetAncestor(hwnd, NativeMethods.GA_ROOT);
-            if (root == IntPtr.Zero) root = hwnd;
+            // Fallback: walk the top-level windows in z-order, skipping our own
+            if (root == IntPtr.Zero) root = FindExternalWindowAt(pt);
+
+            if (root == IntPtr.Zero)
+            {
+                error = "Nenhum programa encontrado nesse ponto. Clique sobre a janela do programa que deve receber os cliques.";
+                return null;
+            }
 
             NativeMethods.GetWindowThreadProcessId(root, out uint pid);
-            if (pid == OwnProcessId)
-            {
-                error = "Esse ponto é do próprio Gabriel Autoclick. Escolha um ponto em outra janela.";
-                return null;
-            }
-
             string className = GetClassName(root);
             if (className is "Progman" or "WorkerW" or "Shell_TrayWnd")
             {
@@ -279,6 +281,41 @@ namespace GabrielAutoclick.Services
                 ClientX = client.X,
                 ClientY = client.Y
             };
+        }
+
+        /// <summary>
+        /// True when another window is on top of the point. Messages are still delivered, but some
+        /// frameworks (e.g. WinForms buttons) only accept a click when the point is visible on screen.
+        /// </summary>
+        public static bool IsPointCovered(BackgroundClickPoint p)
+        {
+            if (NativeMethods.IsIconic(p.Hwnd)) return false;
+            var screen = new NativeMethods.POINT(p.ClientX, p.ClientY);
+            NativeMethods.ClientToScreen(p.Hwnd, ref screen);
+            IntPtr at = NativeMethods.WindowFromPoint(screen);
+            if (at == IntPtr.Zero) return false;
+            return NativeMethods.GetAncestor(at, NativeMethods.GA_ROOT) != p.Hwnd;
+        }
+
+        /// <summary>Topmost visible window of another process that contains the screen point.</summary>
+        private static IntPtr FindExternalWindowAt(NativeMethods.POINT pt)
+        {
+            IntPtr result = IntPtr.Zero;
+            NativeMethods.EnumWindows((h, _) =>
+            {
+                if (!NativeMethods.IsWindowVisible(h) || NativeMethods.IsIconic(h)) return true;
+                if (((long)NativeMethods.GetWindowLongPtr(h, NativeMethods.GWL_EXSTYLE) & NativeMethods.WS_EX_TRANSPARENT) != 0) return true;
+                if (DwmGetWindowAttribute(h, DWMWA_CLOAKED, out int cloaked, sizeof(int)) == 0 && cloaked != 0) return true;
+                if (!NativeMethods.GetWindowRect(h, out var r)) return true;
+                if (pt.X < r.Left || pt.X >= r.Right || pt.Y < r.Top || pt.Y >= r.Bottom) return true;
+
+                NativeMethods.GetWindowThreadProcessId(h, out uint pid);
+                if (pid == OwnProcessId) return true;
+
+                result = h; // EnumWindows walks from the top of the z-order
+                return false;
+            }, IntPtr.Zero);
+            return result;
         }
 
         /// <summary>
@@ -363,17 +400,32 @@ namespace GabrielAutoclick.Services
         #region Click delivery
 
         public static bool SendClick(BackgroundClickPoint p, BackgroundClickMethod method, bool sendMove, out string error)
+            => SendClick(p, method, sendMove, out error, out _);
+
+        /// <param name="permanent">True when retrying can never succeed (configuration or permission problem).</param>
+        public static bool SendClick(BackgroundClickPoint p, BackgroundClickMethod method, bool sendMove, out string error, out bool permanent)
         {
             error = string.Empty;
+            permanent = false;
+
+            if (method == BackgroundClickMethod.UIAutomation && p.Kind is BackgroundClickKind.Right or BackgroundClickKind.Middle)
+            {
+                error = "UI Automation só aciona o controle (equivale ao clique esquerdo). Troque o método ou o tipo de clique.";
+                permanent = true;
+                return false;
+            }
+
             try
             {
-                return method switch
+                bool ok = method switch
                 {
                     BackgroundClickMethod.SendMessage => ClickWithMessages(p, sendMove, synchronous: true, out error),
                     BackgroundClickMethod.UIAutomation => ClickWithUIAutomation(p, out error),
                     BackgroundClickMethod.CompatibilityCursor => ClickWithCursor(p, out error),
                     _ => ClickWithMessages(p, sendMove, synchronous: false, out error)
                 };
+                if (!ok && error.StartsWith("Acesso negado")) permanent = true;
+                return ok;
             }
             catch (Exception ex)
             {
@@ -607,7 +659,7 @@ namespace GabrielAutoclick.Services
             var input = new NativeMethods.INPUT
             {
                 type = NativeMethods.INPUT_MOUSE,
-                u = new NativeMethods.INPUTUNION { mi = new NativeMethods.MOUSEINPUT { dwFlags = flags } }
+                u = new NativeMethods.INPUTUNION { mi = new NativeMethods.MOUSEINPUT { dwFlags = flags, dwExtraInfo = SelfClickGuard.Signature } }
             };
             NativeMethods.SendInput(1, new[] { input }, Marshal.SizeOf<NativeMethods.INPUT>());
         }

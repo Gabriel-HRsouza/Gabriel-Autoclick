@@ -125,9 +125,23 @@ namespace GabrielAutoclick
             _bgService.Start(_bgPoints.ToList(), cfg);
         }
 
-        private void BtnBgStart_Click(object sender, RoutedEventArgs e) => StartBackgroundClick();
-        private void BtnBgPause_Click(object sender, RoutedEventArgs e) => _bgService.TogglePause();
-        private void BtnBgStop_Click(object sender, RoutedEventArgs e) => _bgService.Stop();
+        private void BtnBgStart_Click(object sender, RoutedEventArgs e)
+        {
+            if (IgnoreSelfClick("Iniciar segundo plano")) return;
+            StartBackgroundClick();
+        }
+
+        private void BtnBgPause_Click(object sender, RoutedEventArgs e)
+        {
+            if (IgnoreSelfClick("Pausar segundo plano")) return;
+            _bgService.TogglePause();
+        }
+
+        private void BtnBgStop_Click(object sender, RoutedEventArgs e)
+        {
+            if (IgnoreSelfClick("Parar segundo plano")) return;
+            _bgService.Stop();
+        }
 
         private void UpdateBgState(BackgroundRunState state)
         {
@@ -135,13 +149,14 @@ namespace GabrielAutoclick
             {
                 BackgroundRunState.Running => ("Clicando em segundo plano", "SuccessBrush"),
                 BackgroundRunState.Paused => ("Pausado", "WarningBrush"),
+                BackgroundRunState.Finished => ("Concluído", "AccentBrush"),
                 _ => ("Parado", "TextMutedBrush")
             };
 
             TxtBgState.Text = text;
             BgStatusDot.Fill = (Brush)FindResource(brush);
 
-            bool active = state != BackgroundRunState.Stopped;
+            bool active = state is BackgroundRunState.Running or BackgroundRunState.Paused;
             BtnBgStart.IsEnabled = !active;
             BtnBgPause.IsEnabled = active;
             BtnBgStop.IsEnabled = active;
@@ -149,7 +164,7 @@ namespace GabrielAutoclick
             TxtBgPauseText.Text = state == BackgroundRunState.Paused ? "Continuar" : "Pausar";
 
             string hotkeys = $"{_hotkeyService.Config.BackgroundToggle.ToDisplayString()} inicia ou para  ·  {_hotkeyService.Config.BackgroundPause.ToDisplayString()} pausa";
-            if (!active && (TxtBgSubstatus.Text == "Parado" || TxtBgSubstatus.Text.StartsWith("Selecione")))
+            if (!active && state == BackgroundRunState.Stopped && (TxtBgSubstatus.Text == "Parado" || TxtBgSubstatus.Text.StartsWith("Selecione")))
             {
                 TxtBgSubstatus.Text = _bgPoints.Count == 0 ? "Selecione uma posição para começar." : hotkeys;
             }
@@ -183,12 +198,20 @@ namespace GabrielAutoclick
             var overlay = new PointPickerOverlay();
             overlay.ShowDialog();
 
+            // Identify the target window while Gabriel Autoclick is still hidden; showing it first
+            // made the point resolve to our own window ("Esse ponto é do próprio Gabriel Autoclick").
+            BackgroundClickPoint? point = null;
+            string error = string.Empty;
+            if (overlay.IsConfirmed)
+            {
+                await Task.Delay(50); // let the overlay window be fully destroyed
+                point = BackgroundClickService.CaptureAt(overlay.SelectedX, overlay.SelectedY, out error);
+            }
+
             Show();
             Activate();
 
             if (!overlay.IsConfirmed) return;
-
-            var point = BackgroundClickService.CaptureAt(overlay.SelectedX, overlay.SelectedY, out string error);
             if (point == null)
             {
                 ShowBgBanner(error, isError: true);

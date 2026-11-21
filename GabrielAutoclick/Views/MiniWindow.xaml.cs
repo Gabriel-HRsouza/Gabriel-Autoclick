@@ -48,7 +48,8 @@ namespace GabrielAutoclick.Views
 
         private void BtnToggle_Click(object sender, RoutedEventArgs e)
         {
-            AppManager.Instance.ToggleAutoClick();
+            if (GabrielAutoclick.Helpers.SelfClickGuard.IsCurrentInputSynthetic()) return;
+            AppManager.Instance.ToggleAutoClick(AutoClickStopReason.UserButton);
         }
 
         private void BtnRestore_Click(object sender, RoutedEventArgs e)
@@ -81,10 +82,11 @@ namespace GabrielAutoclick.Views
                 AutoClickState.Running => ("Clicando", "SuccessBrush"),
                 AutoClickState.Paused => ("Pausado", "WarningBrush"),
                 AutoClickState.CountingDown => ("Aguardando", "AccentBrush"),
+                AutoClickState.Finished => ("Concluído", "AccentBrush"),
                 _ => ("Desligado", "TextMutedBrush")
             };
 
-            bool active = state != AutoClickState.Stopped;
+            bool active = state is AutoClickState.Running or AutoClickState.Paused or AutoClickState.CountingDown;
             StatusDot.Fill = (Brush)FindResource(brushKey);
             TxtStatus.Text = text;
             TxtBtnIcon.Text = active ? "" : "";

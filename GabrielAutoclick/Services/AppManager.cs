@@ -269,7 +269,7 @@ namespace GabrielAutoclick.Services
 
         public void StartAutoClick()
         {
-            if (CurrentState == AppExecutionState.Running) return;
+            if (AutoClickService.IsActive) return;
 
             ClickSettings settings;
             if (MainWindowInstance != null)
@@ -297,7 +297,7 @@ namespace GabrielAutoclick.Services
 
         public void ToggleAutoClick(AutoClickStopReason reason = AutoClickStopReason.GlobalHotkey)
         {
-            if (AutoClickService.State == AutoClickState.Running || AutoClickService.State == AutoClickState.CountingDown)
+            if (AutoClickService.IsActive)
             {
                 StopAutoClick(reason);
             }
@@ -309,10 +309,10 @@ namespace GabrielAutoclick.Services
 
         public void TogglePause()
         {
-            // Toggle pause/running
-            if (AutoClickService.State == AutoClickState.Running)
+            // Real pause: the run stays alive and resumes where it was
+            if (AutoClickService.IsActive)
             {
-                AutoClickService.Stop();
+                AutoClickService.TogglePause();
             }
             else
             {

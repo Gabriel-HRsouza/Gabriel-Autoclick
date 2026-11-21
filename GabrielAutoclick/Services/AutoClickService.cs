@@ -1,7 +1,6 @@
 using System;
 using System.Diagnostics;
 using System.Threading;
-using System.Threading.Tasks;
 using GabrielAutoclick.Helpers;
 using GabrielAutoclick.Models;
 
@@ -12,9 +11,15 @@ namespace GabrielAutoclick.Services
         Stopped = 0,
         CountingDown = 1,
         Running = 2,
-        Paused = 3
+        Paused = 3,
+        /// <summary>Ended by itself after reaching the configured click count or time limit.</summary>
+        Finished = 4
     }
 
+    /// <summary>
+    /// Classic autoclicker. Lifecycle (start/pause/resume/stop, single instance, session safety)
+    /// is handled by <see cref="RunController"/>; this class only implements the clicking loop.
+    /// </summary>
     public class AutoClickService
     {
         private readonly MouseInputService _mouseInput;
@@ -22,16 +27,23 @@ namespace GabrielAutoclick.Services
         private readonly WindowRestrictionService _windowRestrictionService;
         private readonly StatisticsService _statisticsService;
         private readonly Random _rng = new Random();
-
-        private CancellationTokenSource? _cts;
-        private Task? _executionTask;
+        private readonly RunController _runner = new RunController("Autoclick");
         private readonly object _lock = new object();
 
+        // Sub-states inside an active run (only meaningful while the runner is Running)
+        private volatile bool _countingDown;
+        private volatile bool _waitingForWindow;
+        private bool _overOwnWindow;
+        private AutoClickStopReason _lastStopReason = AutoClickStopReason.UserButton;
+
         public AutoClickState State { get; private set; } = AutoClickState.Stopped;
+        public bool IsActive => _runner.IsActive;
+        /// <summary>Paused by the user (as opposed to waiting for the restricted window).</summary>
+        public bool IsUserPaused => _runner.State == RunState.Paused;
         public ClickSettings CurrentSettings { get; set; } = new ClickSettings();
 
-        public long SessionClicksCount { get; private set; } = 0;
-        public double CurrentCps { get; private set; } = 0;
+        public long SessionClicksCount { get; private set; }
+        public double CurrentCps { get; private set; }
         public TimeSpan ElapsedTime { get; private set; } = TimeSpan.Zero;
 
         // Events
@@ -51,214 +63,202 @@ namespace GabrielAutoclick.Services
             _safeZoneService = safeZoneService;
             _windowRestrictionService = windowRestrictionService;
             _statisticsService = statisticsService;
+
+            _runner.StateChanged += _ => PublishState();
         }
+
+        #region Run control
 
         public void Start(ClickSettings settings)
         {
             lock (_lock)
             {
-                if (State == AutoClickState.Running || State == AutoClickState.CountingDown)
-                    return;
+                if (_runner.IsActive) return;
 
                 CurrentSettings = settings.Clone();
-
-                // Dispose previous CTS cleanly and instantiate fresh token
-                try
-                {
-                    _cts?.Cancel();
-                    _cts?.Dispose();
-                }
-                catch { }
-
-                _cts = new CancellationTokenSource();
                 SessionClicksCount = 0;
                 CurrentCps = 0;
                 ElapsedTime = TimeSpan.Zero;
+                _overOwnWindow = false;
+                _waitingForWindow = false;
+                _countingDown = CurrentSettings.StartDelaySeconds > 0;
+                _lastStopReason = AutoClickStopReason.UserButton;
 
-                LoggerService.Log($"[AUTOCLICK START] Mode={CurrentSettings.PositionMode}, Button={CurrentSettings.MouseButton}, CPS={CurrentSettings.ComputedCps:0.0}, RepeatMode={CurrentSettings.RepeatMode}, RepeatCount={CurrentSettings.RepeatCount}, RepeatDuration={CurrentSettings.RepeatDurationSeconds}s, Thread={Environment.CurrentManagedThreadId}, TokenCancelled={_cts.IsCancellationRequested}");
+                LoggerService.Log($"[AUTOCLICK START] Mode={CurrentSettings.PositionMode}, Button={CurrentSettings.MouseButton}, CPS={CurrentSettings.ComputedCps:0.0}, RepeatMode={CurrentSettings.RepeatMode}");
 
-                _executionTask = Task.Run(() => ExecutionLoopAsync(CurrentSettings, _cts.Token));
+                var snapshot = CurrentSettings;
+                _runner.TryStart(ctx => RunLoop(ctx, snapshot));
             }
         }
 
         public void Stop(AutoClickStopReason reason = AutoClickStopReason.UserButton)
         {
-            lock (_lock)
+            if (!_runner.IsActive) return;
+
+            LoggerService.Log($"[AUTOCLICK STOP] Reason={reason}, Elapsed={ElapsedTime.TotalSeconds:0.0}s, Clicks={SessionClicksCount}");
+            _lastStopReason = reason;
+            _runner.Stop();
+
+            StatusMessageUpdated?.Invoke(reason == AutoClickStopReason.PanicF12 ? "Parado pelo botão de emergência" : "Parado");
+            if (reason == AutoClickStopReason.PanicF12) SoundService.PlayPanicSound();
+            else SoundService.PlayStopSound();
+        }
+
+        public void Pause()
+        {
+            if (_runner.Pause())
             {
-                if (State == AutoClickState.Stopped) return;
-
-                LoggerService.Log($"[AUTOCLICK STOP] Reason={reason}, Elapsed={ElapsedTime.TotalSeconds:0.0}s, Clicks={SessionClicksCount}, TokenCancelled={_cts?.IsCancellationRequested}");
-                
-                try
-                {
-                    _cts?.Cancel();
-                }
-                catch { }
-
-                State = AutoClickState.Stopped;
-                StateChanged?.Invoke(State);
-                
-                string msg = reason switch
-                {
-                    AutoClickStopReason.PanicF12 => "Parado pelo botão de emergência",
-                    AutoClickStopReason.RepetitionCompleted => "Concluído: limite de cliques atingido",
-                    AutoClickStopReason.TimeLimitCompleted => "Concluído: tempo limite atingido",
-                    AutoClickStopReason.SafeZone => "Parado: cursor entrou em zona protegida",
-                    _ => "Parado"
-                };
-
-                StatusMessageUpdated?.Invoke(msg);
-
-                if (reason == AutoClickStopReason.PanicF12)
-                {
-                    SoundService.PlayPanicSound();
-                }
-                else
-                {
-                    SoundService.PlayStopSound();
-                }
+                StatusMessageUpdated?.Invoke("Pausado. Clique em Continuar para retomar.");
+                SoundService.PlayStopSound();
             }
         }
 
-        public void Panic()
+        public void Resume()
         {
-            Stop(AutoClickStopReason.PanicF12);
+            if (_runner.Resume())
+            {
+                StatusMessageUpdated?.Invoke("Clicando");
+                SoundService.PlayStartSound();
+            }
         }
 
-        private async Task ExecutionLoopAsync(ClickSettings settings, CancellationToken ct)
+        public void TogglePause()
         {
-            var swOverall = Stopwatch.StartNew();
+            if (_runner.State == RunState.Paused) Resume();
+            else Pause();
+        }
+
+        public void Panic() => Stop(AutoClickStopReason.PanicF12);
+
+        private void PublishState()
+        {
+            AutoClickState next = _runner.State switch
+            {
+                RunState.Running when _countingDown => AutoClickState.CountingDown,
+                RunState.Running when _waitingForWindow => AutoClickState.Paused,
+                RunState.Running => AutoClickState.Running,
+                RunState.Paused => AutoClickState.Paused,
+                RunState.Finished => AutoClickState.Finished,
+                _ => AutoClickState.Stopped
+            };
+
+            lock (_lock)
+            {
+                if (next == State) return;
+                State = next;
+            }
+            StateChanged?.Invoke(next);
+        }
+
+        #endregion
+
+        #region Clicking loop (worker thread)
+
+        private void RunLoop(RunContext ctx, ClickSettings settings)
+        {
+            var swOverall = new Stopwatch();
             var swCpsWindow = Stopwatch.StartNew();
             var swRunningLog = Stopwatch.StartNew();
             long clicksInCpsWindow = 0;
-            long totalClicksExecuted = 0;
+            long totalClicks = 0;
 
             try
             {
-                // 1. Handle Start Delay
+                // 1. Optional countdown before the first click
                 if (settings.StartDelaySeconds > 0)
                 {
-                    State = AutoClickState.CountingDown;
-                    StateChanged?.Invoke(State);
-
+                    PublishState();
                     for (int s = settings.StartDelaySeconds; s > 0; s--)
                     {
-                        if (ct.IsCancellationRequested) return;
                         CountdownProgress?.Invoke(s);
                         StatusMessageUpdated?.Invoke($"Iniciando em {s}...");
                         SoundService.PlayCountdownTick();
-                        await Task.Delay(1000, ct);
+                        if (!ctx.Sleep(1000)) return;
                     }
+                    _countingDown = false;
                 }
 
-                if (ct.IsCancellationRequested) return;
-
-                State = AutoClickState.Running;
-                StateChanged?.Invoke(State);
+                PublishState();
                 StatusMessageUpdated?.Invoke("Clicando");
                 SoundService.PlayStartSound();
 
-                // Capture initial position if CurrentPosition mode
                 int capturedX = 0, capturedY = 0;
                 if (settings.PositionMode == ClickPositionMode.CurrentPosition)
                 {
                     var pos = _mouseInput.GetCursorPosition();
                     capturedX = pos.X;
                     capturedY = pos.Y;
-                    LoggerService.Log($"Captured CurrentPosition for session: ({capturedX}, {capturedY})");
                 }
 
-                swOverall.Restart();
-                swCpsWindow.Restart();
-                swRunningLog.Restart();
+                swOverall.Start();
 
-                while (!ct.IsCancellationRequested)
+                while (ctx.WaitIfPaused())
                 {
-                    // Check repeat count limit
-                    if (settings.RepeatMode == RepeatMode.Count)
+                    // Natural end conditions -> Finished (not an error, not a user stop)
+                    if (settings.RepeatMode == RepeatMode.Count && settings.RepeatCount > 0 && totalClicks >= settings.RepeatCount)
                     {
-                        if (settings.RepeatCount > 0 && totalClicksExecuted >= settings.RepeatCount)
-                        {
-                            LoggerService.Log($"[AUTOCLICK REPEAT LIMIT] Reached {totalClicksExecuted}/{settings.RepeatCount} clicks.");
-                            Stop(AutoClickStopReason.RepetitionCompleted);
-                            break;
-                        }
+                        StatusMessageUpdated?.Invoke($"Concluído: {totalClicks} cliques realizados");
+                        SoundService.PlayStopSound();
+                        return;
                     }
-                    // Check repeat duration limit
-                    else if (settings.RepeatMode == RepeatMode.Duration)
+                    if (settings.RepeatMode == RepeatMode.Duration && settings.RepeatDurationSeconds > 0 &&
+                        swOverall.Elapsed.TotalSeconds >= settings.RepeatDurationSeconds)
                     {
-                        if (settings.RepeatDurationSeconds > 0 && swOverall.Elapsed.TotalSeconds >= settings.RepeatDurationSeconds)
-                        {
-                            LoggerService.Log($"[AUTOCLICK DURATION LIMIT] Reached {swOverall.Elapsed.TotalSeconds:0.0}/{settings.RepeatDurationSeconds}s.");
-                            Stop(AutoClickStopReason.TimeLimitCompleted);
-                            break;
-                        }
+                        StatusMessageUpdated?.Invoke($"Concluído: tempo de {settings.RepeatDurationSeconds} s atingido");
+                        SoundService.PlayStopSound();
+                        return;
                     }
-                    // RepeatMode.UntilStopped (Infinite): NEVER stops automatically!
 
-                    // Check Window Restriction
+                    // Optional "only while window X is focused": wait, never stop
                     if (!_windowRestrictionService.IsTargetWindowActive())
                     {
-                        if (State != AutoClickState.Paused)
+                        if (!_waitingForWindow)
                         {
-                            State = AutoClickState.Paused;
-                            StateChanged?.Invoke(State);
-                            StatusMessageUpdated?.Invoke("Pausado: janela alvo não está em foco");
-                            LoggerService.Log("AutoClick paused: Target window not foreground");
+                            _waitingForWindow = true;
+                            PublishState();
+                            StatusMessageUpdated?.Invoke("Aguardando a janela alvo voltar ao foco");
                         }
-                        await Task.Delay(150, ct);
+                        if (!ctx.Sleep(150)) return;
                         continue;
                     }
-                    else if (State == AutoClickState.Paused)
+                    if (_waitingForWindow)
                     {
-                        State = AutoClickState.Running;
-                        StateChanged?.Invoke(State);
+                        _waitingForWindow = false;
+                        PublishState();
                         StatusMessageUpdated?.Invoke("Clicando");
-                        LoggerService.Log("AutoClick resumed: Target window returned to foreground");
                     }
 
-                    // Periodic running log every 5s
-                    if (swRunningLog.ElapsedMilliseconds >= 5000)
+                    if (swRunningLog.ElapsedMilliseconds >= 10000)
                     {
-                        LoggerService.Log($"[AUTOCLICK RUNNING] Elapsed={swOverall.Elapsed.TotalSeconds:0.#}s, Clicks={totalClicksExecuted}, CurrentCPS={CurrentCps:0.0}");
+                        LoggerService.Log($"[AUTOCLICK RUNNING] Elapsed={swOverall.Elapsed.TotalSeconds:0}s, Clicks={totalClicks}, CPS={CurrentCps:0.0}");
                         swRunningLog.Restart();
                     }
 
-                    // Burst Mode Execution or Standard Execution
                     if (settings.BurstModeEnabled)
                     {
-                        for (int i = 0; i < settings.BurstClicksCount && !ct.IsCancellationRequested; i++)
+                        for (int i = 0; i < settings.BurstClicksCount && !ctx.IsCancelled; i++)
                         {
-                            bool clicked = ExecuteSingleClick(settings, ref capturedX, ref capturedY, totalClicksExecuted + 1);
-                            if (clicked)
+                            if (ExecuteSingleClick(settings, ref capturedX, ref capturedY, totalClicks + 1))
                             {
-                                totalClicksExecuted++;
+                                totalClicks++;
                                 clicksInCpsWindow++;
-                                SessionClicksCount = totalClicksExecuted;
+                                SessionClicksCount = totalClicks;
                                 _statisticsService.RegisterClick();
                             }
-
-                            if (i < settings.BurstClicksCount - 1)
-                            {
-                                MouseInputService.PreciseWaitMilliseconds(settings.BurstIntervalMs, ct);
-                            }
+                            if (i < settings.BurstClicksCount - 1 && !ctx.PreciseSleep(settings.BurstIntervalMs)) return;
                         }
-
-                        // Burst cooldown
-                        MouseInputService.PreciseWaitMilliseconds(settings.BurstCooldownMs, ct);
+                        if (!ctx.PreciseSleep(settings.BurstCooldownMs)) return;
                     }
                     else
                     {
-                        bool clicked = ExecuteSingleClick(settings, ref capturedX, ref capturedY, totalClicksExecuted + 1);
-                        if (clicked)
+                        if (ExecuteSingleClick(settings, ref capturedX, ref capturedY, totalClicks + 1))
                         {
-                            totalClicksExecuted++;
+                            totalClicks++;
                             clicksInCpsWindow++;
-                            SessionClicksCount = totalClicksExecuted;
+                            SessionClicksCount = totalClicks;
                             _statisticsService.RegisterClick();
                         }
 
-                        // Calculate next interval
                         int delayMs = settings.TotalIntervalMs;
                         if (settings.RandomIntervalEnabled)
                         {
@@ -266,45 +266,36 @@ namespace GabrielAutoclick.Services
                             int max = Math.Max(settings.MinRandomIntervalMs, settings.MaxRandomIntervalMs);
                             delayMs = _rng.Next(min, max + 1);
                         }
-
-                        // Enforce safe minimum threshold
-                        if (delayMs < 1) delayMs = 1;
-
-                        MouseInputService.PreciseWaitMilliseconds(delayMs, ct);
+                        if (!ctx.PreciseSleep(Math.Max(1, delayMs))) return;
                     }
 
-                    // Periodic metrics dispatch (every ~200ms)
                     if (swCpsWindow.ElapsedMilliseconds >= 200)
                     {
                         double windowSeconds = swCpsWindow.Elapsed.TotalSeconds;
                         CurrentCps = windowSeconds > 0 ? Math.Round(clicksInCpsWindow / windowSeconds, 1) : 0;
                         ElapsedTime = swOverall.Elapsed;
-
                         _statisticsService.UpdateRuntimeStats(CurrentCps, windowSeconds);
                         MetricsUpdated?.Invoke(SessionClicksCount, CurrentCps, ElapsedTime);
-
                         clicksInCpsWindow = 0;
                         swCpsWindow.Restart();
                     }
                 }
             }
-            catch (OperationCanceledException)
-            {
-                LoggerService.Log("AutoClick loop cancelled cleanly");
-            }
-            catch (Exception ex)
-            {
-                LoggerService.LogException("AutoClick ExecutionLoop error", ex);
-                Stop(AutoClickStopReason.InternalError);
-            }
             finally
             {
+                // Mouse button must never stay held after "press and hold" mode
+                if (settings.ClickAction == ClickActionType.HoldDown)
+                {
+                    _mouseInput.SendMouseUp(settings.MouseButton);
+                }
+
+                _countingDown = false;
+                _waitingForWindow = false;
                 ElapsedTime = swOverall.Elapsed;
-                State = AutoClickState.Stopped;
-                StateChanged?.Invoke(State);
-                StatusMessageUpdated?.Invoke("Parado");
+                CurrentCps = 0;
+                MetricsUpdated?.Invoke(SessionClicksCount, 0, ElapsedTime);
                 _statisticsService.SaveStatistics();
-                LoggerService.Log($"[AUTOCLICK FINISHED] Total session clicks: {SessionClicksCount}, Duration: {ElapsedTime.TotalSeconds:0.0}s");
+                LoggerService.Log($"[AUTOCLICK FINISHED] Clicks={SessionClicksCount}, Duration={ElapsedTime.TotalSeconds:0.0}s, StopReason={_lastStopReason}, Cancelled={ctx.IsCancelled}");
             }
         }
 
@@ -323,41 +314,55 @@ namespace GabrielAutoclick.Services
                 case ClickPositionMode.CurrentPosition:
                     targetX = capturedX;
                     targetY = capturedY;
-                    _mouseInput.SetCursorPosition(targetX, targetY);
                     break;
 
                 case ClickPositionMode.FixedPosition:
                     targetX = settings.FixedX;
                     targetY = settings.FixedY;
-                    _mouseInput.SetCursorPosition(targetX, targetY);
                     break;
             }
 
-            // Apply Random Position Jitter if enabled
             if (settings.RandomPositionEnabled && settings.RandomRadiusPixels > 0)
             {
                 var jittered = _mouseInput.ApplyRandomRadius(targetX, targetY, settings.RandomRadiusPixels);
                 targetX = jittered.X;
                 targetY = jittered.Y;
-                if (settings.PositionMode != ClickPositionMode.FollowCursor)
-                {
-                    _mouseInput.SetCursorPosition(targetX, targetY);
-                }
             }
 
-            // Check Safe Zones
+            // Never click on Gabriel Autoclick itself: only outside the app. Checked before the
+            // cursor is moved, so the app never even pulls the cursor onto its own window.
+            if (SafeZoneService.IsOverOwnWindow(targetX, targetY))
+            {
+                if (!_overOwnWindow)
+                {
+                    _overOwnWindow = true;
+                    StatusMessageUpdated?.Invoke("Cursor sobre o Gabriel Autoclick: cliques suspensos até sair da janela");
+                }
+                return false;
+            }
+            if (_overOwnWindow)
+            {
+                _overOwnWindow = false;
+                StatusMessageUpdated?.Invoke("Clicando");
+            }
+
             if (_safeZoneService.IsPointInSafeZone(targetX, targetY, out var hitZone))
             {
                 SafeZoneBlocked?.Invoke(targetX, targetY);
                 StatusMessageUpdated?.Invoke($"Clique bloqueado pela zona protegida \"{hitZone?.Name}\"");
-                LoggerService.Log($"Click blocked by safe zone '{hitZone?.Name}' at ({targetX}, {targetY})");
                 return false;
             }
 
-            // Execute mouse action
+            if (settings.PositionMode != ClickPositionMode.FollowCursor)
+            {
+                _mouseInput.SetCursorPosition(targetX, targetY);
+            }
+
             bool success = _mouseInput.ExecuteClickAction(settings.MouseButton, settings.ClickAction);
             LoggerService.LogClick(clickSeq, targetX, targetY, success ? 1u : 0u, success ? 0 : System.Runtime.InteropServices.Marshal.GetLastWin32Error());
             return success;
         }
+
+        #endregion
     }
 }

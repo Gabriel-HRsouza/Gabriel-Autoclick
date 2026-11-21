@@ -132,7 +132,7 @@ namespace GabrielAutoclick.Services
                             mouseData = 0,
                             dwFlags = flags,
                             time = 0,
-                            dwExtraInfo = IntPtr.Zero
+                            dwExtraInfo = SelfClickGuard.Signature
                         }
                     }
                 };
@@ -148,7 +148,7 @@ namespace GabrielAutoclick.Services
             {
                 try
                 {
-                    NativeMethods.mouse_event(flags, 0, 0, 0, UIntPtr.Zero);
+                    NativeMethods.mouse_event(flags, 0, 0, 0, (UIntPtr)(ulong)SelfClickGuard.Signature);
                     result = 1;
                 }
                 catch { }

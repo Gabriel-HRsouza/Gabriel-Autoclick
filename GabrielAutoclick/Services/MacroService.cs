@@ -47,7 +47,6 @@ namespace GabrielAutoclick.Services
         private readonly uint _ownProcessId = (uint)Environment.ProcessId;
 
         // Playback state
-        private CancellationTokenSource? _playbackCts;
         private readonly object _lock = new object();
 
         public List<MacroAction> RecordedActions { get; set; } = new List<MacroAction>();
@@ -79,6 +78,7 @@ namespace GabrielAutoclick.Services
             _safeZoneService = safeZoneService;
             _windowRestrictionService = windowRestrictionService;
             _statisticsService = statisticsService;
+            _playRunner.StateChanged += OnPlayRunnerStateChanged;
         }
 
         #region Recording
@@ -353,84 +353,109 @@ namespace GabrielAutoclick.Services
 
         #region Playback
 
+        private readonly RunController _playRunner = new RunController("Macro");
+
+        /// <summary>Playback lifecycle: Stopped / Running / Paused / Finished.</summary>
+        public event Action<RunState>? PlaybackRunStateChanged;
+        public bool IsPlaybackPaused => _playRunner.State == RunState.Paused;
+        public RunState PlaybackState => _playRunner.State;
+
+        private void OnPlayRunnerStateChanged(RunState s)
+        {
+            IsPlaying = s is RunState.Running or RunState.Paused;
+            PlaybackRunStateChanged?.Invoke(s);
+            if (s is RunState.Running && !_playbackWasActive) { _playbackWasActive = true; PlaybackStateChanged?.Invoke(true); }
+            else if (s is RunState.Stopped or RunState.Finished && _playbackWasActive) { _playbackWasActive = false; PlaybackStateChanged?.Invoke(false); }
+        }
+        private volatile bool _playbackWasActive;
+
         public void StartPlayback(double speed = 1.0, int loops = 1)
         {
-            CancellationTokenSource cts;
             List<MacroAction> actionsCopy;
-
             lock (_lock)
             {
-                if (IsPlaying || IsRecording || RecordedActions.Count == 0) return;
-
+                if (_playRunner.IsActive || IsRecording || RecordedActions.Count == 0) return;
                 PlaybackSpeed = speed <= 0 ? 1.0 : speed;
                 LoopCount = Math.Max(0, loops);
-                cts = new CancellationTokenSource();
-                _playbackCts = cts;
-                IsPlaying = true;
                 actionsCopy = new List<MacroAction>(RecordedActions);
             }
 
-            LoggerService.Log($"[MACRO] Reprodução iniciada: {actionsCopy.Count} ações, {PlaybackSpeed}x, ciclos={LoopCount}");
-            PlaybackStateChanged?.Invoke(true);
-            StatusUpdated?.Invoke("Executando macro");
-            SoundService.PlayStartSound();
-
             double sp = PlaybackSpeed;
             int lp = LoopCount;
-            var thread = new Thread(() => PlaybackLoop(actionsCopy, sp, lp, cts))
+            if (_playRunner.TryStart(ctx => PlaybackLoop(ctx, actionsCopy, sp, lp)))
             {
-                IsBackground = true,
-                Priority = ThreadPriority.AboveNormal,
-                Name = "MacroPlayback"
-            };
-            thread.Start();
+                LoggerService.Log($"[MACRO] Reprodução iniciada: {actionsCopy.Count} ações, {sp}x, ciclos={lp}");
+                StatusUpdated?.Invoke("Executando macro");
+                SoundService.PlayStartSound();
+            }
         }
 
         public void StopPlayback()
         {
-            lock (_lock)
-            {
-                if (!IsPlaying) return;
-                _playbackCts?.Cancel();
-            }
+            if (!_playRunner.IsActive) return;
+            _playRunner.Stop();
+            StatusUpdated?.Invoke("Parado");
             SoundService.PlayStopSound();
+        }
+
+        public void TogglePlaybackPause()
+        {
+            if (_playRunner.State == RunState.Paused)
+            {
+                if (_playRunner.Resume()) StatusUpdated?.Invoke("Executando macro");
+            }
+            else if (_playRunner.Pause())
+            {
+                StatusUpdated?.Invoke("Macro pausada");
+            }
         }
 
         public void Panic()
         {
             if (IsRecording) StopRecording();
-            lock (_lock)
-            {
-                _playbackCts?.Cancel();
-            }
+            _playRunner.Stop();
         }
 
-        private void PlaybackLoop(List<MacroAction> actions, double speed, int maxLoops, CancellationTokenSource cts)
+        private void PlaybackLoop(RunContext ctx, List<MacroAction> actions, double speed, int maxLoops)
         {
-            var ct = cts.Token;
             var heldKeys = new Dictionary<int, MacroAction>();
             var heldButtons = new HashSet<MouseButtonType>();
+            var clock = new Stopwatch();
+
+            // While paused nothing may stay pressed, and the macro clock must not advance
+            bool HonorPause()
+            {
+                if (!ctx.IsPaused) return !ctx.IsCancelled;
+                clock.Stop();
+                foreach (var key in heldKeys.Values) SendKey(key, keyUp: true);
+                foreach (var btn in heldButtons) _mouseInput.SendMouseUp(btn);
+                if (!ctx.WaitIfPaused()) return false;
+                foreach (var key in heldKeys.Values) SendKey(key, keyUp: false);
+                foreach (var btn in heldButtons) _mouseInput.SendMouseDown(btn);
+                clock.Start();
+                return true;
+            }
 
             try
             {
                 int completedCycles = 0;
-                while (!ct.IsCancellationRequested)
+                while (!ctx.IsCancelled)
                 {
-                    var clock = Stopwatch.StartNew();
+                    clock.Restart();
                     double targetMs = 0;
 
                     for (int i = 0; i < actions.Count; i++)
                     {
-                        if (ct.IsCancellationRequested) return;
+                        if (!HonorPause()) return;
 
-                        // Pause while the restricted target window is not focused
+                        // Optional focus restriction: wait (clock frozen), never stop
                         if (!_windowRestrictionService.IsTargetWindowActive())
                         {
-                            StatusUpdated?.Invoke("Macro pausada (janela inativa)");
+                            StatusUpdated?.Invoke("Macro aguardando a janela alvo voltar ao foco");
                             clock.Stop();
                             while (!_windowRestrictionService.IsTargetWindowActive())
                             {
-                                if (ct.WaitHandle.WaitOne(150)) return;
+                                if (!ctx.Sleep(150)) return;
                             }
                             clock.Start();
                             StatusUpdated?.Invoke("Executando macro");
@@ -439,9 +464,15 @@ namespace GabrielAutoclick.Services
                         var act = actions[i];
                         targetMs += act.DelayMs / speed;
 
-                        int wait = (int)Math.Round(targetMs - clock.Elapsed.TotalMilliseconds);
-                        if (wait > 0) MouseInputService.PreciseWaitMilliseconds(wait, ct);
-                        if (ct.IsCancellationRequested) return;
+                        // Wait in small slices so a pause takes effect immediately
+                        while (true)
+                        {
+                            if (!HonorPause()) return;
+                            int wait = (int)Math.Round(targetMs - clock.Elapsed.TotalMilliseconds);
+                            if (wait <= 0) break;
+                            MouseInputService.PreciseWaitMilliseconds(Math.Min(wait, 50), ctx.Token);
+                            if (ctx.IsCancelled) return;
+                        }
 
                         ExecuteAction(act, heldKeys, heldButtons);
 
@@ -455,30 +486,20 @@ namespace GabrielAutoclick.Services
                     PlaybackCycleCompleted?.Invoke(completedCycles);
                     _statisticsService.RegisterMacroExecution();
 
-                    if (maxLoops > 0 && completedCycles >= maxLoops) break;
+                    if (maxLoops > 0 && completedCycles >= maxLoops)
+                    {
+                        StatusUpdated?.Invoke("Macro concluída");
+                        SoundService.PlayStopSound();
+                        return;
+                    }
                 }
-            }
-            catch (OperationCanceledException) { }
-            catch (Exception ex)
-            {
-                LoggerService.LogException("[MACRO] Erro na reprodução", ex);
             }
             finally
             {
                 // Never leave keys or buttons stuck down
                 foreach (var key in heldKeys.Values) SendKey(key, keyUp: true);
                 foreach (var btn in heldButtons) _mouseInput.SendMouseUp(btn);
-
-                lock (_lock)
-                {
-                    IsPlaying = false;
-                    if (ReferenceEquals(_playbackCts, cts)) _playbackCts = null;
-                }
-                cts.Dispose();
-
-                LoggerService.Log("[MACRO] Reprodução finalizada");
-                PlaybackStateChanged?.Invoke(false);
-                StatusUpdated?.Invoke("Parado");
+                LoggerService.Log($"[MACRO] Reprodução finalizada (cancelada={ctx.IsCancelled})");
             }
         }
 
@@ -556,7 +577,8 @@ namespace GabrielAutoclick.Services
                         dx = ax,
                         dy = ay,
                         dwFlags = NativeMethods.MOUSEEVENTF_MOVE | NativeMethods.MOUSEEVENTF_ABSOLUTE |
-                                  NativeMethods.MOUSEEVENTF_VIRTUALDESK | buttonFlags
+                                  NativeMethods.MOUSEEVENTF_VIRTUALDESK | buttonFlags,
+                        dwExtraInfo = SelfClickGuard.Signature
                     }
                 }
             };
@@ -565,7 +587,7 @@ namespace GabrielAutoclick.Services
             {
                 // Fallback for sessions where SendInput is blocked
                 NativeMethods.SetCursorPos(x, y);
-                if (buttonFlags != 0) NativeMethods.mouse_event(buttonFlags, 0, 0, 0, UIntPtr.Zero);
+                if (buttonFlags != 0) NativeMethods.mouse_event(buttonFlags, 0, 0, 0, (UIntPtr)(ulong)SelfClickGuard.Signature);
             }
         }
 
@@ -579,7 +601,8 @@ namespace GabrielAutoclick.Services
                     mi = new NativeMethods.MOUSEINPUT
                     {
                         mouseData = unchecked((uint)act.WheelDelta),
-                        dwFlags = act.IsHorizontalWheel ? NativeMethods.MOUSEEVENTF_HWHEEL : NativeMethods.MOUSEEVENTF_WHEEL
+                        dwFlags = act.IsHorizontalWheel ? NativeMethods.MOUSEEVENTF_HWHEEL : NativeMethods.MOUSEEVENTF_WHEEL,
+                        dwExtraInfo = SelfClickGuard.Signature
                     }
                 }
             };
@@ -605,7 +628,8 @@ namespace GabrielAutoclick.Services
                     {
                         wVk = scan != 0 ? (ushort)0 : (ushort)act.VkCode,
                         wScan = (ushort)scan,
-                        dwFlags = flags
+                        dwFlags = flags,
+                        dwExtraInfo = SelfClickGuard.Signature
                     }
                 }
             };
@@ -648,7 +672,7 @@ namespace GabrielAutoclick.Services
         public void Dispose()
         {
             StopHooks();
-            _playbackCts?.Cancel();
+            _playRunner.Stop();
             GC.SuppressFinalize(this);
         }
     }
